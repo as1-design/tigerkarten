@@ -1,0 +1,1181 @@
+<meta charset="utf-8">
+<title>Tigerkarten</title>
+<meta name="description" content="A German flashcard trainer that pairs Anki's spaced repetition and reversed cards with Duolingo's streaks, hearts and XP.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F5902B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tigerkarten">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,600&display=swap">
+<style>
+:root{
+  --bg:#F4F6EF; --bg2:#E9EDE0; --card:#FFFFFF; --ink:#33412A; --muted:#7C8B6B;
+  --line:#E2E7D6; --line2:#D3DBC2;
+  --go:#5AB81E; --go-d:#468f12; --go-soft:#EAF6DD;
+  --xp:#F5B400; --xp-d:#c9930a;
+  --heart:#E8452B; --heart-d:#bf3620;
+  --info:#1C9BE6; --info-d:#1179bd;
+  --crown:#8A5CF6; --crown-d:#6d3ee0;
+  --gem:#1EC0C8; --gem-d:#149aa1;
+  --shadow: 0 10px 30px rgba(48,66,30,.10);
+  --r:18px;
+}
+:root:not([data-theme="light"]){ @media (prefers-color-scheme: dark){
+  --bg:#151A11; --bg2:#1C2317; --card:#212A1B; --ink:#EAF1E0; --muted:#93A47F;
+  --line:#2E3924; --line2:#3A472C; --go-soft:#26311b;
+  --shadow: 0 12px 34px rgba(0,0,0,.45);
+}}
+:root[data-theme="dark"]{
+  --bg:#151A11; --bg2:#1C2317; --card:#212A1B; --ink:#EAF1E0; --muted:#93A47F;
+  --line:#2E3924; --line2:#3A472C; --go-soft:#26311b;
+  --shadow: 0 12px 34px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:"Nunito",system-ui,sans-serif;margin:0;
+  -webkit-font-smoothing:antialiased;line-height:1.4;overscroll-behavior:none}
+h1,h2,h3{font-family:"Baloo 2","Nunito",sans-serif;margin:0;text-wrap:balance;letter-spacing:-.01em}
+button{font-family:inherit}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---- App frame (phone) ---- */
+#app{max-width:480px;margin:0 auto;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;
+  background:var(--bg);position:relative}
+@media(min-width:520px){
+  body{padding:0;background:
+    radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb,var(--go) 12%,transparent), transparent 60%), var(--bg2)}
+  #app{margin:22px auto;min-height:calc(100dvh - 44px);border:1px solid var(--line2);border-radius:30px;
+    box-shadow:var(--shadow);overflow:hidden}
+}
+
+/* ---- HUD ---- */
+.hud{display:flex;align-items:center;gap:8px;padding:14px 16px 12px;position:sticky;top:0;z-index:40;
+  background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.stat{display:flex;align-items:center;gap:5px;font-weight:800;font-size:16px}
+.stat svg{width:22px;height:22px;display:block}
+.stat.small{font-size:15px}
+.hud .grow{flex:1}
+.hearts{display:flex;gap:2px;align-items:center}
+.hearts .h{width:19px;height:19px}
+.ring-mini{position:relative;width:34px;height:34px}
+.ring-mini svg{transform:rotate(-90deg)}
+.ring-mini b{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:800}
+
+/* ---- generic ---- */
+.view{flex:1;display:flex;flex-direction:column}
+.pad{padding:16px}
+.muted{color:var(--muted)}
+.center{text-align:center}
+.row{display:flex;align-items:center;gap:10px}
+.sp{justify-content:space-between}
+.chip{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12.5px;padding:5px 11px;
+  border-radius:999px;background:var(--bg2);color:var(--muted);border:1px solid var(--line)}
+.chip.on{background:var(--go-soft);color:var(--go-d);border-color:transparent}
+.eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;font-weight:800;color:var(--muted)}
+
+/* ---- 3D chunky buttons (the Duolingo tell) ---- */
+.btn{--c:var(--go);--cd:var(--go-d);appearance:none;border:0;cursor:pointer;width:100%;
+  background:var(--c);color:#fff;font-weight:800;font-size:16px;letter-spacing:.02em;
+  padding:15px 18px;border-radius:16px;box-shadow:0 5px 0 0 var(--cd);
+  text-transform:uppercase;transition:transform .04s, box-shadow .04s;position:relative}
+.btn:active{transform:translateY(4px);box-shadow:0 1px 0 0 var(--cd)}
+.btn:focus-visible{outline:3px solid color-mix(in srgb,var(--c) 55%,#fff);outline-offset:3px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:var(--card);color:var(--ink);box-shadow:0 4px 0 0 var(--line2);border:2px solid var(--line2);
+  padding:13px 18px}
+.btn.ghost:active{box-shadow:0 0 0 0 var(--line2)}
+.btn.info{--c:var(--info);--cd:var(--info-d)}
+.btn.xp{--c:var(--xp);--cd:var(--xp-d)}
+.btn.sm{font-size:13.5px;padding:11px 12px;border-radius:13px}
+.iconbtn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);
+  width:40px;height:40px;border-radius:12px;display:grid;place-items:center;cursor:pointer}
+.iconbtn:hover{border-color:var(--line2)}
+.iconbtn svg{width:20px;height:20px}
+
+/* ---- Mascot ---- */
+.mascot{display:flex;align-items:flex-end;gap:12px}
+.mascot .toon{flex:0 0 auto;filter:drop-shadow(0 8px 10px rgba(48,66,30,.12))}
+.bubble{background:var(--card);border:2px solid var(--line2);border-radius:16px;padding:11px 14px;
+  font-weight:700;position:relative;flex:1;font-size:15px}
+.bubble:after{content:"";position:absolute;left:-9px;bottom:16px;width:16px;height:16px;background:var(--card);
+  border-left:2px solid var(--line2);border-bottom:2px solid var(--line2);transform:rotate(45deg)}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.toon.bobbing{animation:bob 2.6s ease-in-out infinite}
+
+/* ---- Goal card ---- */
+.goalcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.ring{position:relative;width:96px;height:96px;flex:0 0 auto}
+.ring svg{transform:rotate(-90deg)}
+.ring .lbl{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring .lbl b{font-family:"Baloo 2";font-size:22px;line-height:1}
+.ring .lbl span{font-size:10.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+
+/* ---- Unit path ---- */
+.path{position:relative;padding:8px 0 30px}
+.unit{display:flex;align-items:center;gap:14px;margin:0 auto;width:max-content;position:relative;padding:11px 0;cursor:pointer;
+  background:none;border:0;color:inherit;text-align:left}
+.node{position:relative;width:74px;height:70px;flex:0 0 auto}
+.node .base{position:absolute;inset:0}
+.node .cap{position:absolute;inset:8px;border-radius:50%;display:grid;place-items:center;
+  color:#fff;font-family:"Baloo 2";font-weight:800;font-size:24px;
+  box-shadow:0 6px 0 0 var(--nd, rgba(0,0,0,.18));transition:transform .05s,box-shadow .05s}
+.unit:active .cap{transform:translateY(4px);box-shadow:0 2px 0 0 var(--nd)}
+.node.locked .cap{background:var(--line2)!important;color:var(--muted);box-shadow:0 6px 0 0 var(--line)!important}
+.node .badge{position:absolute;top:-4px;right:-6px;min-width:22px;height:22px;padding:0 5px;border-radius:999px;
+  background:var(--heart);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;
+  border:2px solid var(--bg);z-index:3}
+.unit .meta{max-width:150px}
+.unit .meta .t{font-family:"Baloo 2";font-weight:700;font-size:16px;line-height:1.1}
+.unit .meta .s{font-size:12.5px;color:var(--muted);font-weight:700;margin-top:2px}
+.crowns{display:flex;gap:2px;margin-top:4px;color:var(--xp)}
+.crowns svg{width:13px;height:13px}
+.crowns .off{color:var(--line2)}
+
+/* league */
+.lb{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--line)}
+.lb:last-child{border-bottom:0}
+.lb .rk{width:22px;text-align:center;font-weight:800;color:var(--muted)}
+.lb .nm{flex:1;font-weight:700}
+.lb.me{background:var(--go-soft);border-radius:12px;border-bottom:0;padding-left:10px;padding-right:10px}
+.lb.me .nm{color:var(--go-d)}
+.medal{color:var(--xp)}
+
+/* ---- Review session ---- */
+#session{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column;
+  max-width:480px;margin:0 auto}
+@media(min-width:520px){#session{border-radius:30px;margin:22px auto;min-height:calc(100dvh - 44px);
+  border:1px solid var(--line2);box-shadow:var(--shadow);overflow:hidden;inset:0}}
+.sbar{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.progress{flex:1;height:15px;border-radius:999px;background:var(--line);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(var(--go),var(--go-d));
+  border-radius:999px;transition:width .35s cubic-bezier(.2,.9,.3,1)}
+.progress i:after{content:"";display:block;height:5px;margin:3px 6px 0;border-radius:999px;background:rgba(255,255,255,.35)}
+.stage{flex:1;display:flex;flex-direction:column;padding:6px 18px 0;overflow:auto}
+.qhead{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 14px}
+.qtype{font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.combo{font-weight:800;color:var(--xp-d);font-size:14px;opacity:0;transition:opacity .2s}
+.combo.on{opacity:1}
+
+/* flashcard */
+.flashwrap{perspective:1400px;flex:0 0 auto;margin:2px 0 16px}
+.flash{position:relative;trans-style:preserve-3d;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.2,.8,.2,1);
+  min-height:230px}
+.flash.flip{transform:rotateY(180deg)}
+.face{position:relative;backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  background:var(--card);border:2px solid var(--line);border-radius:22px;padding:26px 22px;min-height:230px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;box-shadow:var(--shadow)}
+.face.back{position:absolute;inset:0;transform:rotateY(180deg)}
+.pos{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:10px}
+.word{font-family:"Baloo 2";font-weight:800;font-size:40px;line-height:1.05}
+.word .art{color:var(--info);font-weight:700}
+.sub{font-size:19px;font-weight:700;margin-top:8px}
+.ex{margin-top:16px;font-size:14.5px;color:var(--muted);font-style:italic;font-weight:600;max-width:34ch}
+.ex b{color:var(--ink);font-style:normal}
+.tap{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;font-weight:800;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+
+/* MC options */
+.opts{display:flex;flex-direction:column;gap:11px;margin-top:4px}
+.opt{appearance:none;text-align:left;background:var(--card);border:2px solid var(--line2);border-radius:15px;
+  padding:15px 16px;font-weight:700;font-size:16.5px;cursor:pointer;color:var(--ink);
+  box-shadow:0 4px 0 0 var(--line);transition:transform .04s,box-shadow .04s;display:flex;align-items:center;gap:12px}
+.opt .k{width:26px;height:26px;border-radius:8px;border:2px solid var(--line2);display:grid;place-items:center;
+  font-size:13px;color:var(--muted);flex:0 0 auto}
+.opt:not(:disabled):active{transform:translateY(3px);box-shadow:0 1px 0 0 var(--line)}
+.opt.correct{border-color:var(--go);background:var(--go-soft);color:var(--go-d);box-shadow:0 4px 0 0 var(--go)}
+.opt.correct .k{border-color:var(--go);color:var(--go-d)}
+.opt.wrong{border-color:var(--heart);background:color-mix(in srgb,var(--heart) 12%,var(--card));color:var(--heart-d);
+  box-shadow:0 4px 0 0 var(--heart);animation:shake .4s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}
+  60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+
+/* footer actions */
+.foot{padding:14px 18px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--card)}
+.grades{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.grade{appearance:none;border:0;cursor:pointer;border-radius:14px;padding:11px 4px 9px;color:#fff;font-weight:800;
+  display:flex;flex-direction:column;align-items:center;gap:2px;box-shadow:0 4px 0 0 var(--gd);transition:transform .04s,box-shadow .04s}
+.grade:active{transform:translateY(3px);box-shadow:0 1px 0 0 var(--gd)}
+.grade b{font-size:14px;text-transform:uppercase;letter-spacing:.02em}
+.grade span{font-size:11.5px;font-weight:800;opacity:.92}
+.g-again{background:var(--heart);--gd:var(--heart-d)}
+.g-hard{background:#E88A1A;--gd:#c06e0e}
+.g-good{background:var(--go);--gd:var(--go-d)}
+.g-easy{background:var(--info);--gd:var(--info-d)}
+
+/* feedback banner */
+.fb{position:absolute;left:0;right:0;bottom:0;transform:translateY(100%);transition:transform .28s cubic-bezier(.2,.9,.3,1);
+  padding:16px 18px calc(16px + env(safe-area-inset-bottom));z-index:5}
+.fb.show{transform:translateY(0)}
+.fb.ok{background:var(--go-soft)}
+.fb.no{background:color-mix(in srgb,var(--heart) 14%,var(--card))}
+.fb .fbrow{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.fb .fi{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
+.fb.ok .fi{background:var(--go);color:#fff}
+.fb.no .fi{background:var(--heart);color:#fff}
+.fb .ft{font-family:"Baloo 2";font-weight:800;font-size:19px}
+.fb.ok .ft{color:var(--go-d)} .fb.no .ft{color:var(--heart-d)}
+.fb .fs{font-size:13.5px;font-weight:700;color:var(--muted)}
+
+/* xp floaters */
+.floater{position:fixed;z-index:70;font-family:"Baloo 2";font-weight:800;font-size:22px;color:var(--xp-d);
+  pointer-events:none;text-shadow:0 1px 0 #fff8}
+@keyframes floatUp{0%{transform:translateY(0) scale(.8);opacity:0}
+  15%{opacity:1;transform:translateY(-6px) scale(1.1)}100%{transform:translateY(-70px) scale(1);opacity:0}}
+
+/* complete screen */
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center;gap:6px}
+.trophy{width:120px;height:120px;filter:drop-shadow(0 10px 14px rgba(245,180,0,.35))}
+.statrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:340px;margin:14px 0 4px}
+.statbox{border-radius:16px;padding:2px;box-shadow:0 4px 0 0 var(--bd)}
+.statbox .inner{background:var(--card);border-radius:14px;padding:12px;text-align:left}
+.statbox .k{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#fff}
+.statbox.sb-xp{background:var(--xp);--bd:var(--xp-d)} .statbox.sb-acc{background:var(--info);--bd:var(--info-d)}
+.statbox.sb-combo{background:var(--crown);--bd:var(--crown-d)} .statbox.sb-time{background:var(--go);--bd:var(--go-d)}
+.statbox .v{font-family:"Baloo 2";font-weight:800;font-size:26px;line-height:1}
+.sb-xp .v{color:var(--xp-d)} .sb-acc .v{color:var(--info-d)} .sb-combo .v{color:var(--crown-d)} .sb-time .v{color:var(--go-d)}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:90;background:rgba(20,26,15,.5);display:none;align-items:flex-end;justify-content:center}
+.modal.open{display:flex}
+@media(min-width:520px){.modal{align-items:center}}
+.sheet{background:var(--bg);width:100%;max-width:480px;border-radius:24px 24px 0 0;padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  max-height:88vh;overflow:auto;border:1px solid var(--line2)}
+@media(min-width:520px){.sheet{border-radius:24px;margin:20px}}
+.sheet h2{margin-bottom:4px}
+.field{margin:16px 0}
+.field label{font-weight:800;font-size:14px;display:block;margin-bottom:8px}
+.seg{display:flex;background:var(--bg2);border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;background:none;padding:9px 6px;border-radius:9px;font-weight:800;font-size:13.5px;
+  color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+input[type=text]{width:100%;padding:12px 13px;border-radius:12px;border:2px solid var(--line2);background:var(--card);
+  color:var(--ink);font-family:inherit;font-size:15px;font-weight:600}
+input[type=text]:focus{outline:none;border-color:var(--go)}
+input[type=range]{width:100%;accent-color:var(--go)}
+.danger{color:var(--heart-d);font-weight:800}
+.close{position:absolute}
+
+canvas#confetti{position:fixed;inset:0;pointer-events:none;z-index:80}
+.hide{display:none!important}
+.seclabel{text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:800;color:var(--muted);
+  margin:22px 0 4px;padding-top:14px;border-top:1px solid var(--line)}
+.syncbadge{display:inline-flex;align-items:center;gap:7px}
+.syncbadge:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.syncbadge[data-s="synced"]:before{background:var(--go)}
+.syncbadge[data-s="syncing"]:before{background:var(--xp)}
+.syncbadge[data-s="need"]:before{background:var(--info)}
+.syncbadge[data-s="error"]:before{background:var(--heart)}
+input[type=time]{width:100%;padding:11px 13px;border-radius:12px;border:2px solid var(--line2);background:var(--card);
+  color:var(--ink);font-family:inherit;font-size:15px;font-weight:700}
+input[type=time]:focus{outline:none;border-color:var(--go)}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.001s!important;transition-duration:.05s!important}}
+</style>
+
+<div id="app">
+  <div class="hud" id="hud"></div>
+  <div class="view" id="home"></div>
+</div>
+
+<div id="session">
+  <div class="sbar">
+    <button class="iconbtn" id="quit" aria-label="Quit session">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div class="progress"><i id="prog"></i></div>
+    <div class="stat small" id="shearts"></div>
+  </div>
+  <div class="stage" id="stage"></div>
+  <div class="foot" id="foot"></div>
+  <div class="fb" id="fb"></div>
+</div>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<canvas id="confetti"></canvas>
+
+<script src="cards.js"></script>
+<script>
+(function(){
+"use strict";
+const RAW = window.CARD_DATA || [];
+// [en,de,article,pos,category,difficulty,ex_de,ex_en]
+const F={EN:0,DE:1,ART:2,POS:3,CAT:4,DIFF:5,EXDE:6,EXEN:7};
+const DAY=864e5, MIN=6e4;
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+const todayKey=(d=new Date())=>{d=new Date(d);d.setHours(0,0,0,0);return Math.floor(d/DAY);};
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------- units ---------- */
+const UNIT_COLORS=["#5AB81E","#1C9BE6","#8A5CF6","#E8452B","#F5B400","#12B5A6","#EC6A2C","#D6459E",
+  "#3E7BF0","#7BAE12","#B45CE0","#E0932C","#2FB0C8","#C24545","#6C8A1F","#4F6BD4","#CB6E1F","#199E6E"];
+const CROWN_XP=[0,60,160,320]; // xp within unit to reach crown levels 1..3
+const units=[]; const unitIndex={}; const catList=[];
+RAW.forEach((c,i)=>{
+  const cat=c[F.CAT]||"other";
+  if(!(cat in unitIndex)){unitIndex[cat]=units.length;catList.push(cat);
+    units.push({name:cat,color:UNIT_COLORS[units.length%UNIT_COLORS.length],idxs:[]});}
+  units[unitIndex[cat]].idxs.push(i);
+});
+const titleCase=s=>s.replace(/\b\w/g,m=>m.toUpperCase());
+
+/* ---------- persistence ---------- */
+const SKEY="tigerkarten.v1";
+let S;
+const defaults=()=>({
+  prog:{}, // idx -> {ease,ivl(days),due(ms),reps,lapses,st:'learning'|'review',step}
+  custom:[], // [en,de,art,pos,'My Cards',diff,exde,exen]
+  unitXp:{}, // unit name -> lifetime xp for crowns
+  meta:{streak:0,last:0, xpToday:0, dayKey:todayKey(), newToday:0,
+    totalXp:0, gems:120, hearts:5, heartTs:Date.now(), goal:50,
+    dir:"de2en", reversed:false, newPerDay:15, hardMode:true, sound:true, weekXp:0, weekKey:weekKey(),
+    savedAt:0, remindOn:false, remindTime:"19:00", remindLast:0}
+});
+function weekKey(){const d=new Date();const day=(d.getDay()+6)%7;return todayKey(new Date(Date.now()-day*DAY));}
+function load(){
+  try{const r=localStorage.getItem(SKEY);S=r?JSON.parse(r):defaults();}catch(e){S=defaults();}
+  const d=defaults(); S=Object.assign({},d,S); S.meta=Object.assign({},d.meta,S.meta||{});
+  rollover();
+}
+let saveT; function save(){
+  S.meta.savedAt=Date.now();
+  try{clearTimeout(saveT);saveT=setTimeout(()=>{
+    try{localStorage.setItem(SKEY,JSON.stringify(S));}catch(e){}
+    syncPush();
+  },120);}catch(e){}
+}
+function rollover(){
+  const m=S.meta, tk=todayKey();
+  if(m.dayKey!==tk){ m.dayKey=tk; m.xpToday=0; m.newToday=0; }
+  if(m.weekKey!==weekKey()){ m.weekKey=weekKey(); m.weekXp=0; }
+  // heart regen: 1 per 30 min
+  regenHearts();
+}
+function regenHearts(){
+  const m=S.meta; if(m.hearts>=5){m.heartTs=Date.now();return;}
+  const gained=Math.floor((Date.now()-m.heartTs)/(30*MIN));
+  if(gained>0){ m.hearts=Math.min(5,m.hearts+gained); m.heartTs=Date.now()-((Date.now()-m.heartTs)%(30*MIN)); if(m.hearts>=5)m.heartTs=Date.now(); }
+}
+
+/* ---------- sync: auto-save to a file + universal backup/restore ----------
+   No accounts, no setup. On a computer you pick a sync file ONCE (put it in a
+   Google Drive / Dropbox / iCloud folder) and the app saves to it automatically
+   on every change — that folder's app then syncs it to your other devices.
+   Where the browser blocks file access (iPhone/Safari/Firefox), use one-tap
+   Backup / Restore instead. localStorage is always the offline cache. */
+const HAS_FS = typeof window.showSaveFilePicker === "function";
+let fileHandle=null, fsReady=false, fsPushT=null, syncState="local";
+const SYNC_LABEL={local:"Nur auf diesem Gerät", syncing:"Speichere…", synced:"Automatisch gespeichert",
+  error:"Datei getrennt", need:"Zum Verbinden tippen"};
+function syncLabel(){ return SYNC_LABEL[syncState]||""; }
+function setSync(s){ syncState=s; document.querySelectorAll(".syncbadge").forEach(e=>{ e.textContent=syncLabel(); e.dataset.s=s; }); }
+
+// compact pack/unpack keeps saved files small
+const ST_CODE={learning:0,review:1}, ST_NAME=["learning","review"];
+function packProg(){ const o={}; for(const k in S.prog){ const p=S.prog[k];
+  o[k]=[+(+p.ease).toFixed(2), +(+(p.ivl||0)).toFixed(2), p.due, p.reps|0, p.lapses|0, ST_CODE[p.st]||0, p.step|0]; }
+  return o; }
+function unpackProg(o){ const r={}; for(const k in o){ const a=o[k];
+  r[k]=Array.isArray(a)?{ease:a[0],ivl:a[1],due:a[2],reps:a[3],lapses:a[4],st:ST_NAME[a[5]]||"learning",step:a[6]}:a; }
+  return r; }
+function packState(){ return {app:"tigerkarten", v:1, savedAt:S.meta.savedAt||Date.now(),
+  meta:S.meta, custom:S.custom, unitXp:S.unitXp, prog:packProg()}; }
+function applyState(d){
+  if(!d) return;
+  S.meta=Object.assign(defaults().meta, d.meta||{});
+  S.custom=d.custom||[]; S.unitXp=d.unitXp||{}; S.prog=unpackProg(d.prog||{});
+  try{localStorage.setItem(SKEY,JSON.stringify(S));}catch(e){}
+}
+
+// remember the chosen file handle across sessions (IndexedDB)
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open("tk-sync",1);
+  r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbGet(k){ try{ const d=await idbOpen(); return await new Promise(res=>{
+  const t=d.transaction("kv").objectStore("kv").get(k); t.onsuccess=()=>res(t.result); t.onerror=()=>res(null); }); }catch(e){ return null; } }
+async function idbSet(k,v){ try{ const d=await idbOpen(); d.transaction("kv","readwrite").objectStore("kv").put(v,k); }catch(e){} }
+
+async function readHandle(h){ const f=await h.getFile(); const t=await f.text(); return t?JSON.parse(t):null; }
+async function writeHandle(h,obj){ const w=await h.createWritable(); await w.write(JSON.stringify(obj)); await w.close(); }
+
+async function initSync(){
+  if(!HAS_FS){ setSync("local"); return; }
+  try{
+    const h=await idbGet("handle");
+    if(!h){ setSync("local"); return; }
+    fileHandle=h;
+    const perm=await h.queryPermission({mode:"readwrite"});
+    if(perm!=="granted"){ setSync("need"); return; }   // needs a tap to re-grant this session
+    await pullThenEnable();
+  }catch(e){ setSync("error"); }
+}
+async function pullThenEnable(){
+  try{
+    const remote=await readHandle(fileHandle);
+    if(remote && (remote.savedAt||0) > (S.meta.savedAt||0)){ applyState(remote); rollover(); renderHome(); }
+    else { await writeHandle(fileHandle, packState()); }
+    fsReady=true; setSync("synced");
+  }catch(e){ setSync("error"); }
+}
+async function connectSyncFile(){
+  if(!HAS_FS){ toast("Auf diesem Gerät nicht verfügbar — nutze Backup / Wiederherstellen"); return; }
+  try{
+    const h=await window.showSaveFilePicker({ suggestedName:"tigerkarten-progress.json",
+      types:[{description:"Tigerkarten Fortschritt", accept:{"application/json":[".json"]}}] });
+    fileHandle=h; await idbSet("handle",h); await pullThenEnable();
+    if(modal.classList.contains("open")) openSettings();
+    toast("Sync-Datei verbunden ✓");
+  }catch(e){ if(e && e.name!=="AbortError") setSync("error"); }
+}
+async function reconnectSync(){
+  if(!fileHandle) return connectSyncFile();
+  try{ const p=await fileHandle.requestPermission({mode:"readwrite"});
+    if(p==="granted"){ await pullThenEnable(); if(modal.classList.contains("open")) openSettings(); } }
+  catch(e){ setSync("error"); }
+}
+function syncPush(){
+  if(!fsReady || !fileHandle) return;
+  setSync("syncing"); clearTimeout(fsPushT);
+  fsPushT=setTimeout(async()=>{ try{ await writeHandle(fileHandle, packState()); setSync("synced"); }catch(e){ setSync("error"); } }, 800);
+}
+// another device may have updated the shared file while we were away
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden || !fsReady) return;
+  if(document.getElementById("session").style.display==="flex") return;
+  readHandle(fileHandle).then(r=>{ if(r && (r.savedAt||0) > (S.meta.savedAt||0)){ applyState(r); rollover(); renderHome(); setSync("synced"); } }).catch(()=>{});
+});
+
+// universal backup / restore — works on every device, including iPhone
+function exportBackup(){
+  try{
+    const blob=new Blob([JSON.stringify(packState())],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a");
+    a.href=url; a.download="tigerkarten-progress.json"; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },600);
+  }catch(e){ toast("Backup nicht möglich"); }
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d.app!=="tigerkarten") throw 0;
+    applyState(d); rollover(); renderHome(); syncPush(); toast("Fortschritt wiederhergestellt ✓"); }
+    catch(e){ toast("Ungültige Backup-Datei"); } };
+  r.readAsText(file);
+}
+
+/* ---------- reminders (best-effort, no server) ---------- */
+function notifyReady(){ return ("Notification" in window) && Notification.permission==="granted"; }
+async function enableReminders(){
+  if(!("Notification" in window)){ toast("Benachrichtigungen hier nicht verfügbar"); return false; }
+  let p=Notification.permission;
+  if(p==="default") p=await Notification.requestPermission();
+  if(p!=="granted"){ toast("Benachrichtigungen wurden blockiert"); return false; }
+  return true;
+}
+function fireReminder(){
+  const title="Zeit zu lernen! 🐯";
+  const body=S.meta.streak>0 ? `Halte deine ${S.meta.streak}-Tage-Serie am Leben — ein paar Karten?` : "Ein paar Karten Deutsch heute?";
+  const opts={body, tag:"tk-remind", icon:"icon.svg", badge:"icon.svg"};
+  try{
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification(title,opts)).catch(()=>{ try{ new Notification(title,opts); }catch(e){} });
+    } else { new Notification(title,opts); }
+  }catch(e){}
+}
+function maybeRemind(){
+  const m=S.meta; if(!m.remindOn || !notifyReady()) return;
+  const tk=todayKey(); if(m.remindLast===tk) return;
+  const now=new Date(), hhmm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+  if(hhmm < (m.remindTime||"19:00")) return;
+  m.remindLast=tk;
+  if(m.xpToday < m.goal) fireReminder();
+  save();
+}
+
+/* ---------- card access ---------- */
+function card(i){ return i<RAW.length?RAW[i]:S.custom[i-RAW.length]; }
+function allIdx(){ const n=RAW.length+S.custom.length; const a=[];for(let i=0;i<n;i++)a.push(i);return a; }
+function unitOf(i){ if(i>=RAW.length) return "My Cards"; return card(i)[F.CAT]; }
+
+/* ---------- card instances (word + direction) ----------
+   Reversed cards: each word can become two independently-scheduled cards.
+   Forward instance rev=0, reverse instance rev=1. Progress key namespaces them. */
+function REV(){ return !!S.meta.reversed; }
+function pkey(i,rev){ return rev? "r"+i : ""+i; }
+function getP(i,rev){ return S.prog[pkey(i,rev)]; }
+function setP(i,rev,p){ S.prog[pkey(i,rev)]=p; }
+function isNewI(i,rev){ return !getP(i,rev); }
+function isDueI(i,rev){ const p=getP(i,rev); return p && p.due<=Date.now(); }
+function eachInst(idxs,fn){ for(const i of idxs){ fn(i,0); if(REV()) fn(i,1); } }
+function totalInst(idxs){ return idxs.length*(REV()?2:1); }
+
+/* ---------- SRS (SM-2 flavoured) ---------- */
+const LEARN=[1,10]; // minutes
+function fresh(){return {ease:2.5,ivl:0,due:Date.now(),reps:0,lapses:0,st:"learning",step:0};}
+function preview(inst,g){ // returns interval label without mutating
+  const cur=getP(inst.i,inst.rev);
+  const p=cur?JSON.parse(JSON.stringify(cur)):fresh();
+  apply(p,g); return fmtIvl(p);
+}
+function fmtIvl(p){
+  const ms=p.due-Date.now();
+  if(p.st==="learning"){ const m=Math.round(ms/MIN); return m<1?"<1m":m+"m"; }
+  const d=p.ivl;
+  if(d<1) return "<1d";
+  if(d<30) return Math.round(d)+"d";
+  if(d<365) return (d/30).toFixed(d<60?1:0)+"mo";
+  return (d/365).toFixed(1)+"y";
+}
+function apply(p,g){ // mutate p by grade
+  const now=Date.now();
+  if(p.st==="learning"){
+    if(g==="again"){ p.step=0; p.due=now+LEARN[0]*MIN; }
+    else if(g==="hard"){ p.due=now+Math.max(LEARN[p.step]||1, (LEARN[0]))*MIN*1.5; }
+    else if(g==="good"){
+      if(p.step>=LEARN.length-1){ p.st="review"; p.ivl=1; p.reps++; p.due=now+DAY; }
+      else { p.step++; p.due=now+LEARN[p.step]*MIN; }
+    } else { p.st="review"; p.ivl=4; p.reps++; p.due=now+4*DAY; } // easy graduates
+  } else { // review
+    if(g==="again"){ p.lapses++; p.ease=Math.max(1.3,p.ease-0.2); p.st="learning"; p.step=0; p.ivl=0; p.due=now+10*MIN; }
+    else if(g==="hard"){ p.ease=Math.max(1.3,p.ease-0.15); p.ivl=Math.max(1,p.ivl*1.2); p.due=now+p.ivl*DAY; p.reps++; }
+    else if(g==="good"){ p.ivl=Math.max(1,p.ivl*p.ease); p.due=now+p.ivl*DAY; p.reps++; }
+    else { p.ease+=0.15; p.ivl=Math.max(1,p.ivl*p.ease*1.3); p.due=now+p.ivl*DAY; p.reps++; }
+  }
+  return p;
+}
+function grade(inst,g){
+  const before=getP(inst.i,inst.rev); const p=before?before:fresh();
+  const wasNew=!before;
+  apply(p,g); setP(inst.i,inst.rev,p);
+  save();
+  return {wasNew};
+}
+
+/* ---------- orientation & sides ----------
+   Determines which language is prompted for a given instance. */
+function orientationOf(i,rev){
+  if(REV()){ const b=S.meta.dir==="mix"?"de2en":S.meta.dir; return rev? (b==="de2en"?"en2de":"de2en"):b; }
+  let d=S.meta.dir; if(d==="mix") d=(i%2? "de2en":"en2de"); return d;
+}
+function sides(inst){
+  const c=card(inst.i), o=orientationOf(inst.i,inst.rev);
+  if(o==="de2en") return {o, q:(c[F.ART]?c[F.ART]+" ":"")+c[F.DE], a:c[F.EN], ql:"Deutsch", al:"Englisch", de:true};
+  return {o, q:c[F.EN], a:(c[F.ART]?c[F.ART]+" ":"")+c[F.DE], ql:"Englisch", al:"Deutsch", de:false};
+}
+function answerValueFor(j, o){ const c=card(j); return o==="de2en"? c[F.EN] : (c[F.ART]?c[F.ART]+" ":"")+c[F.DE]; }
+
+/* ---------- xp / streak / hearts ---------- */
+function addXp(n,x,y){
+  const m=S.meta;
+  m.totalXp+=n; m.xpToday+=n; m.weekXp+=n;
+  const u=unitOf(cur? cur.i : 0);
+  // streak
+  const tk=todayKey();
+  if(m.last!==tk){ if(m.last===tk-1) m.streak++; else m.streak= (m.last<tk-1? 1 : m.streak||1); if(m.streak<1)m.streak=1; m.last=tk; }
+  save();
+  if(x!=null) floatXp("+"+n+" XP",x,y);
+}
+function creditUnit(unitName,n){ S.unitXp[unitName]=(S.unitXp[unitName]||0)+n; }
+function loseHeart(){ const m=S.meta; if(!m.hardMode) return; if(m.hearts>0){ if(m.hearts===5)m.heartTs=Date.now(); m.hearts--; } save(); }
+function level(){ return Math.floor(S.meta.totalXp/300)+1; }
+function levelInfo(){ const xp=S.meta.totalXp; const lv=Math.floor(xp/300); return {lv:lv+1, cur:xp-lv*300, need:300}; }
+function crownLevel(unitName){ const xp=S.unitXp[unitName]||0; let c=0; for(let k=1;k<CROWN_XP.length;k++) if(xp>=CROWN_XP[k])c=k; return c; }
+
+/* ---------- SVG bits ---------- */
+const svgHeart=(f)=>`<svg class="h" viewBox="0 0 24 24" fill="${f?'var(--heart)':'none'}" stroke="${f?'none':'var(--line2)'}" stroke-width="2"><path d="M12 20.7C7 17 3.5 13.9 3.5 9.9 3.5 7.3 5.5 5.4 8 5.4c1.7 0 3.1.9 4 2.3.9-1.4 2.3-2.3 4-2.3 2.5 0 4.5 1.9 4.5 4.5 0 4-3.5 7.1-8.5 10.8z"/></svg>`;
+const svgFlame=`<svg viewBox="0 0 24 24"><path fill="var(--heart)" d="M12 2c1 3.5-1.5 5-1.5 7 0 1 .7 1.8 1.6 1.8.8 0 1.4-.5 1.6-1.3 1.3 1.2 2.2 3 2.2 4.9A5.9 5.9 0 0 1 12 21a6 6 0 0 1-6-6c0-4.4 3.6-6.3 6-13z"/><path fill="var(--xp)" d="M12 21a3.2 3.2 0 0 0 3.2-3.2c0-1.6-1.2-2.6-2-3.6-.5 1.4-1.6 1.6-2.3 1-.9-.7-.5-1.9-.3-2.6-1 .8-1.9 2.1-1.9 3.7A3.3 3.3 0 0 0 12 21z"/></svg>`;
+const svgGem=`<svg viewBox="0 0 24 24"><path fill="var(--gem)" d="M6 3h12l3.5 5-9.5 13L2.5 8z"/><path fill="var(--gem-d)" opacity=".55" d="M12 21 2.5 8H12zM12 21l9.5-13H12z"/><path fill="#fff" opacity=".35" d="M6 3h6l-2 5H2.5z"/></svg>`;
+const svgCrownSm=`<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3v10H3z"/></svg>`;
+const svgBolt=`<svg viewBox="0 0 24 24"><path fill="var(--xp)" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+function tigerSVG(size){const s=size||96;return `<svg class="toon bobbing" width="${s}" height="${s*0.96}" viewBox="0 0 100 96" aria-hidden="true">
+  <ellipse cx="50" cy="91" rx="27" ry="5" fill="rgba(48,66,30,.12)"/>
+  <!-- ears -->
+  <circle cx="24" cy="24" r="12" fill="#F5902B"/><circle cx="76" cy="24" r="12" fill="#F5902B"/>
+  <circle cx="24" cy="24" r="6" fill="#2b2320"/><circle cx="76" cy="24" r="6" fill="#2b2320"/>
+  <!-- head -->
+  <path d="M50 12C28 12 18 27 18 49c0 24 14 39 32 39s32-15 32-39C82 27 72 12 50 12Z" fill="#F5902B"/>
+  <path d="M50 15c-11 0-19 7-23 17 6-5 14-7 23-7s17 2 23 7C69 22 61 15 50 15Z" fill="#FBB040"/>
+  <!-- stripes -->
+  <g fill="#2b2320">
+    <path d="M50 12c-1.6 5-1.6 9 0 14 1.6-5 1.6-9 0-14Z"/>
+    <path d="M34 19c1 5 2 8 4.5 11-.5-5-1.5-8-4.5-11Zm32 0c-1 5-2 8-4.5 11 .5-5 1.5-8 4.5-11Z"/>
+    <path d="M20 41c4 1 7 2.5 9 5.5-4-1-7-1.5-9-5.5Zm60 0c-4 1-7 2.5-9 5.5 4-1 7-1.5 9-5.5Z"/>
+    <path d="M19 53c4 0 7.5 1 10.5 2.8-4 1-7.5 1-10.5-2.8Zm62 0c-4 0-7.5 1-10.5 2.8 4 1 7.5 1 10.5-2.8Z"/>
+  </g>
+  <!-- muzzle -->
+  <path d="M50 47c-14 0-22 8-22 20 0 12 10 20 22 20s22-8 22-20c0-12-8-20-22-20Z" fill="#FFF3E0"/>
+  <!-- eyes -->
+  <circle cx="37" cy="48" r="8" fill="#fff"/><circle cx="63" cy="48" r="8" fill="#fff"/>
+  <circle cx="38" cy="49" r="4.6" fill="#2b2320"/><circle cx="62" cy="49" r="4.6" fill="#2b2320"/>
+  <circle cx="39.6" cy="47.4" r="1.6" fill="#fff"/><circle cx="63.6" cy="47.4" r="1.6" fill="#fff"/>
+  <!-- nose + mouth -->
+  <path d="M45.5 59.5h9l-4.5 5.5z" fill="#E86A5A"/>
+  <path d="M50 65v4.5M50 69.5c-3.2 4-8 3-9.2-1M50 69.5c3.2 4 8 3 9.2-1" fill="none" stroke="#2b2320" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- whiskers -->
+  <g stroke="#caa26a" stroke-width="1.5" stroke-linecap="round">
+    <path d="M39 61 23 59M39 64 25 66M61 61 77 59M61 64 75 66"/>
+  </g>
+</svg>`;}
+
+/* ---------- HUD ---------- */
+function ringSvg(pct,size,stroke,col){
+  const r=(size-stroke)/2, c=2*Math.PI*r, o=c*(1-clamp(pct,0,1));
+  return `<svg width="${size}" height="${size}"><circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${col}" stroke-width="${stroke}" stroke-linecap="round"
+    stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${o.toFixed(1)}"/></svg>`;
+}
+function renderHud(){
+  regenHearts();
+  const m=S.meta, pct=clamp(m.xpToday/m.goal,0,1);
+  let hearts="";
+  if(m.hardMode){ for(let k=0;k<5;k++) hearts+=svgHeart(k<m.hearts); }
+  $("#hud").innerHTML=`
+    <div class="stat">${svgFlame}<span class="tnum">${m.streak}</span></div>
+    <div class="grow"></div>
+    <div class="stat small">${svgGem}<span class="tnum">${m.gems}</span></div>
+    ${m.hardMode?`<div class="hearts" title="Hearts">${hearts}</div>`:""}
+    <div class="ring-mini" title="Daily goal">${ringSvg(pct,34,4,'var(--xp)')}<b class="tnum">${Math.round(pct*100)}</b></div>
+  `;
+}
+
+/* ---------- HOME ---------- */
+const greetings=["Zeit zu lernen!","Bereit für heute?","Dein Tiger wartet 🐯","Weiter so!","Los geht’s!"];
+function dueCount(scope){ let n=0; eachInst(scope||allIdx(),(i,r)=>{ if(isDueI(i,r))n++; }); return n; }
+function newAvail(scope){ let n=0; eachInst(scope||allIdx(),(i,r)=>{ if(isNewI(i,r))n++; }); return n; }
+function learnedCount(idxs){ let n=0; eachInst(idxs,(i,r)=>{ const p=getP(i,r); if(p&&p.st==="review")n++; }); return n; }
+
+function renderHome(){
+  renderHud();
+  const m=S.meta, li=levelInfo();
+  const totalDue=dueCount(), newLeft=Math.max(0,m.newPerDay-m.newToday);
+  const h=$("#home"); h.innerHTML="";
+
+  const pad=el("div","pad");
+  // mascot + greeting
+  const greet=el("div","mascot"); greet.style.marginBottom="16px";
+  greet.innerHTML=`<div class="mascot-art">${tigerSVG(72)}</div>
+    <div class="bubble">${greetings[m.streak%greetings.length]}<div class="muted" style="font-weight:700;font-size:12.5px;margin-top:2px">
+    ${totalDue>0?`<b style="color:var(--go-d)">${totalDue}</b> Karten fällig`:"Alles wiederholt — super!"}</div></div>`;
+  pad.appendChild(greet);
+
+  // goal card
+  const goal=el("div","goalcard"); goal.style.marginBottom="16px";
+  const pct=clamp(m.xpToday/m.goal,0,1);
+  goal.innerHTML=`<div class="row sp" style="align-items:center">
+      <div class="ring">${ringSvg(pct,96,10,'var(--xp)')}<div class="lbl"><b class="tnum">${m.xpToday}</b><span>/ ${m.goal} XP</span></div></div>
+      <div style="flex:1;padding-left:16px">
+        <div class="eyebrow">Tagesziel</div>
+        <div style="font-family:'Baloo 2';font-weight:700;font-size:19px;margin:2px 0 8px">${pct>=1?"Ziel erreicht! 🎉":"Sammle heute XP"}</div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <span class="chip">${svgBolt2()} Level ${li.lv}</span>
+          <span class="chip">🔥 ${m.streak} Tage</span>
+        </div>
+        <div style="height:8px;border-radius:99px;background:var(--line);margin-top:10px;overflow:hidden">
+          <i style="display:block;height:100%;width:${Math.round(li.cur/li.need*100)}%;background:var(--crown)"></i></div>
+        <div class="muted" style="font-size:11.5px;font-weight:700;margin-top:4px">${li.cur} / ${li.need} XP bis Level ${li.lv+1}</div>
+      </div>`;
+  pad.appendChild(goal);
+
+  // start button
+  const canStart=totalDue>0||newLeft>0;
+  const startBtn=el("button","btn xp", (totalDue>0? `Wiederholen · ${totalDue}` : (newLeft>0?`Neu lernen · ${Math.min(newLeft,newAvail())}`:"Alles erledigt ✓")));
+  startBtn.style.marginBottom="6px";
+  startBtn.disabled=!canStart;
+  startBtn.onclick=()=>startSession(null);
+  pad.appendChild(startBtn);
+  const sub=el("div","muted center",`${m.hardMode?`❤ ${m.hearts}/5 · `:""}${newLeft} neue Karten heute übrig`);
+  sub.style.cssText+="font-size:12px;font-weight:700;margin:6px 0 4px";
+  pad.appendChild(sub);
+  h.appendChild(pad);
+
+  // ---- unit path ----
+  const sec=el("div","pad"); sec.style.paddingTop="6px";
+  sec.appendChild(el("div","eyebrow","Lernpfad"));
+  const path=el("div","path");
+  const offs=[0,54,86,86,54,0,-54,-86,-86,-54];
+  const allUnits=units.concat(S.custom.length?[{name:"My Cards",color:"#59606B",idxs:S.custom.map((_,k)=>RAW.length+k)}]:[]);
+  allUnits.forEach((u,ui)=>{
+    const learned=learnedCount(u.idxs), total=totalInst(u.idxs), mastered=learned/total;
+    const due=dueCount(u.idxs), fresh=newAvail(u.idxs);
+    const cl=crownLevel(u.name);
+    const node=el("button","unit");
+    node.style.transform=`translateX(${offs[ui%offs.length]*0.6}px)`;
+    const dk=`color-mix(in srgb, ${u.color} 62%, #000)`;
+    node.innerHTML=`
+      <div class="node ${total&&learned===0&&due===0&&fresh===0?'':''}">
+        <div class="node-ring">${ringSvg(mastered,74,7,u.color)}</div>
+        <div class="cap" style="background:${u.color};--nd:${dk}">${cl>0?svgCrownSm:titleCase(u.name).slice(0,1)}</div>
+        ${due>0?`<div class="badge">${due}</div>`:""}
+      </div>
+      <div class="meta">
+        <div class="t">${titleCase(u.name)}</div>
+        <div class="s">${learned}/${total} gelernt${fresh>0?` · ${fresh} neu`:""}</div>
+        <div class="crowns">${[0,1,2].map(k=>`<span class="${k<cl?'':'off'}">${svgCrownSm}</span>`).join("")}</div>
+      </div>`;
+    // position the ring behind cap
+    const nr=node.querySelector(".node-ring"); nr.style.position="absolute"; nr.style.inset="0";
+    node.onclick=()=>startSession(u.idxs.slice(), titleCase(u.name));
+    path.appendChild(node);
+  });
+  sec.appendChild(path);
+  h.appendChild(sec);
+
+  // ---- league ----
+  const lg=el("div","pad"); lg.style.paddingTop="0";
+  lg.appendChild(el("div","eyebrow","Liga · diese Woche"));
+  const board=el("div","goalcard"); board.style.marginTop="8px"; board.style.padding="10px 12px";
+  const bots=[["Lena",120,"🐨"],["Max",95,"🦊"],["Sofia",70,"🐼"],["Jonas",40,"🐧"],["Pia",18,"🐢"]];
+  const meRow=["Du",S.meta.weekXp,"🦉",true];
+  const rows=bots.map(b=>[b[0],b[1],b[2],false]).concat([meRow]).sort((a,b)=>b[1]-a[1]);
+  board.innerHTML=rows.map((r,idx)=>{
+    const medal=idx<3?`<span class="medal">${["①","②","③"][idx]}</span>`:`<span class="rk tnum">${idx+1}</span>`;
+    return `<div class="lb ${r[3]?'me':''}">${medal}<span style="font-size:18px">${r[2]}</span>
+      <span class="nm">${r[0]}</span><b class="tnum" style="color:var(--xp-d)">${r[1]} XP</b></div>`;
+  }).join("");
+  lg.appendChild(board);
+  h.appendChild(lg);
+
+  // ---- footer actions ----
+  const foot=el("div","pad row"); foot.style.cssText+="gap:10px;padding-top:4px;padding-bottom:30px";
+  const addB=el("button","btn ghost sm","+ Eigene Karte"); addB.onclick=openAdd;
+  const setB=el("button","iconbtn"); setB.setAttribute("aria-label","Einstellungen");
+  setB.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7l2.2 1.3M17.6 15.7l2.2 1.3M4.2 17l2.2-1.3M17.6 8.3l2.2-1.3"/></svg>`;
+  setB.onclick=openSettings;
+  foot.appendChild(addB); foot.appendChild(setB);
+  h.appendChild(foot);
+  save();
+}
+function svgBolt2(){return `<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path fill="var(--crown)" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;}
+
+/* ---------- SESSION ---------- */
+let queue=[], cur=null, sess=null;
+function startSession(scopeIdxs, label){
+  regenHearts();
+  const m=S.meta;
+  if(m.hardMode && m.hearts<=0){ outOfHearts(); return; }
+  const scope=scopeIdxs||allIdx();
+  const due=[], newAll=[];
+  eachInst(scope,(i,r)=>{ if(isDueI(i,r)) due.push({i,rev:r}); else if(isNewI(i,r)) newAll.push({i,rev:r}); });
+  due.sort((a,b)=>getP(a.i,a.rev).due-getP(b.i,b.rev).due);
+  let newLeft=Math.max(0,m.newPerDay-m.newToday);
+  if(scopeIdxs){ newLeft=Math.max(newLeft, Math.min(10, newAll.length)); } // unit tap can always teach a few
+  const news=newAll.slice(0,newLeft);
+  if(!due.length && !news.length){ toast("Keine Karten fällig 🎉"); return; }
+  // interleave: sprinkle new among reviews
+  queue=[];
+  const q=due.map(x=>({i:x.i,rev:x.rev,mode:"review"})).concat(news.map(x=>({i:x.i,rev:x.rev,mode:"mc"})));
+  // simple shuffle of the new/review mix but keep learning steps ordering loose
+  for(let k=q.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[q[k],q[j]]=[q[j],q[k]];}
+  queue=q;
+  sess={total:queue.length, done:0, correct:0, answered:0, combo:0, bestCombo:0,
+    xp:0, start:Date.now(), label:label||"Alle Einheiten", goalWasMet:m.xpToday>=m.goal, reinserts:0};
+  $("#session").style.display="flex";
+  $("#home").style.display="none";
+  next();
+}
+function endGuard(){ return sess.done>=sess.total && queue.length===0; }
+function next(){
+  if(!queue.length){ finishSession(); return; }
+  cur=queue.shift();
+  updateProgress();
+  renderShearts();
+  if(cur.mode==="mc") renderMC(); else renderReview();
+}
+function updateProgress(){
+  const p= sess.total? (sess.done/sess.total) : 0;
+  $("#prog").style.width=(p*100).toFixed(1)+"%";
+}
+function renderShearts(){
+  const m=S.meta;
+  if(!m.hardMode){ $("#shearts").innerHTML=`<span style="color:var(--muted);font-weight:800">∞</span>`; return;}
+  $("#shearts").innerHTML=svgHeart(true)+`<span class="tnum" style="color:var(--heart-d)">${m.hearts}</span>`;
+}
+/* --- Multiple choice (new cards, Duolingo style) --- */
+function renderMC(){
+  const i=cur.i, c=card(i), ps=sides(cur);
+  const correct=ps.a;
+  // distractors: other words' answers in the SAME target language as the current answer
+  const pool=[]; const uname=unitOf(i);
+  const src= units[unitIndex[uname]]? units[unitIndex[uname]].idxs : allIdx();
+  for(const j of src){ if(j===i)continue; const val=answerValueFor(j,ps.o); if(val && val!==correct && !pool.includes(val)) pool.push(val); }
+  // fallback global
+  if(pool.length<3){ for(const j of allIdx()){ if(pool.length>=8)break; if(j===i)continue; const val=answerValueFor(j,ps.o); if(val&&val!==correct&&!pool.includes(val))pool.push(val);} }
+  const opts=[correct]; while(opts.length<4 && pool.length){ const r=pool.splice(Math.floor(Math.random()*pool.length),1)[0]; opts.push(r); }
+  for(let k=opts.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[opts[k],opts[j]]=[opts[j],opts[k]];}
+  const stage=$("#stage");
+  stage.innerHTML=`
+    <div class="qhead"><span class="qtype">Neu${cur.rev?" 🔁":""} · Wähle die Übersetzung</span><span class="combo" id="combo"></span></div>
+    <div class="face" style="min-height:150px;margin-bottom:6px">
+      <div class="pos">${esc(c[F.POS]||"")} · ${ps.ql}</div>
+      <div class="word">${esc(ps.q)}</div>
+      ${ps.de&&c[F.EXDE]?`<div class="ex">„${esc(c[F.EXDE])}“</div>`:""}
+    </div>
+    <div class="opts" id="opts"></div>`;
+  const wrap=$("#opts");
+  opts.forEach((o,k)=>{
+    const b=el("button","opt"); b.innerHTML=`<span class="k">${k+1}</span><span>${esc(o)}</span>`;
+    b.onclick=()=>answerMC(b,o===correct,correct);
+    wrap.appendChild(b);
+  });
+  $("#foot").innerHTML=`<div class="muted center" style="font-weight:700;font-size:12.5px">Tippe die richtige Übersetzung an · oder Taste 1–4</div>`;
+  renderCombo();
+}
+function answerMC(btn,ok,correct){
+  Array.from($("#opts").children).forEach(b=>b.disabled=true);
+  const inst={i:cur.i,rev:cur.rev};
+  if(ok){
+    btn.classList.add("correct");
+    grade(inst,"good");
+    S.meta.newToday++;
+    onCorrect(true, btn);
+  } else {
+    btn.classList.add("wrong");
+    Array.from($("#opts").children).forEach(b=>{ if(b.querySelector("span:last-child").textContent===correct) b.classList.add("correct"); });
+    grade(inst,"again");
+    onWrong();
+    // re-teach later this session
+    if(sess.reinserts<40){ sess.reinserts++; queue.splice(Math.min(queue.length,3+Math.floor(Math.random()*3)),0,{i:cur.i,rev:cur.rev,mode:"mc"}); sess.total++; }
+  }
+  sess.answered++;
+}
+/* --- Review flip (Anki style) --- */
+let flipped=false;
+function renderReview(){
+  const i=cur.i, c=card(i), ps=sides(cur);
+  flipped=false;
+  const stage=$("#stage");
+  const p=getP(i,cur.rev);
+  const badge= !p?"neu": (p.st==="review"?"Wiederholung":"Lernphase");
+  stage.innerHTML=`
+    <div class="qhead"><span class="qtype">${badge}${cur.rev?" 🔁":""} · Karte umdrehen</span><span class="combo" id="combo"></span></div>
+    <div class="flashwrap"><div class="flash" id="flash">
+      <div class="face front">
+        <div class="pos">${esc(c[F.POS]||"")} · ${ps.ql}</div>
+        <div class="word">${ps.de&&c[F.ART]?`<span class="art">${esc(c[F.ART])}</span> `:""}${esc(ps.de?c[F.DE]:c[F.EN])}</div>
+        ${ps.de&&c[F.EXDE]?`<div class="ex">„${esc(c[F.EXDE])}“</div>`:""}
+        <div class="tap">Tippen zum Umdrehen</div>
+      </div>
+      <div class="face back">
+        <div class="pos">${ps.al}</div>
+        <div class="word">${esc(ps.a)}</div>
+        <div class="sub muted">${esc(ps.de?c[F.EN]:(c[F.ART]?c[F.ART]+" ":"")+c[F.DE])}</div>
+        ${c[F.EXEN]?`<div class="ex"><b>${esc(c[F.EXDE]||"")}</b><br>${esc(c[F.EXEN])}</div>`:""}
+      </div>
+    </div></div>`;
+  $("#flash").parentElement.onclick=()=>{ if(!flipped) reveal(); };
+  renderReveal();
+  renderCombo();
+}
+function reveal(){
+  flipped=true;
+  $("#flash").classList.add("flip");
+  renderGrades();
+}
+function renderReveal(){
+  $("#foot").innerHTML="";
+  const b=el("button","btn","Antwort zeigen");
+  b.onclick=reveal; $("#foot").appendChild(b);
+}
+function renderGrades(){
+  const defs=[["again","Nochmal","g-again"],["hard","Schwer","g-hard"],["good","Gut","g-good"],["easy","Einfach","g-easy"]];
+  const wrap=el("div","grades");
+  defs.forEach(d=>{
+    const b=el("button","grade "+d[2]);
+    b.innerHTML=`<b>${d[1]}</b><span>${preview(cur,d[0])}</span>`;
+    b.onclick=()=>answerGrade(d[0]);
+    wrap.appendChild(b);
+  });
+  $("#foot").innerHTML=""; $("#foot").appendChild(wrap);
+}
+function answerGrade(g){
+  const i=cur.i, rev=cur.rev;
+  grade({i,rev},g);
+  const p=getP(i,rev);
+  if(g==="again"){
+    onWrong();
+    // requeue if still due soon
+    if(p.due-Date.now()<12*MIN && sess.reinserts<40){ sess.reinserts++; queue.splice(Math.min(queue.length,4),0,{i,rev,mode:"review"}); sess.total++; }
+  } else {
+    onCorrect(false, null, g==="easy"?12:(g==="good"?10:8));
+    if(p.st==="learning" && p.due-Date.now()<12*MIN && sess.reinserts<40){
+      sess.reinserts++; queue.splice(Math.min(queue.length,5+Math.floor(Math.random()*3)),0,{i,rev,mode:"review"}); sess.total++;
+    }
+  }
+  sess.answered++;
+}
+/* --- correct / wrong shared --- */
+function onCorrect(isMc, btn, baseXp){
+  sess.correct++; sess.combo++; sess.bestCombo=Math.max(sess.bestCombo,sess.combo);
+  const uname=unitOf(cur.i);
+  let xp=(baseXp||(isMc?8:10));
+  const bonus=sess.combo>=3?Math.min(6,sess.combo-2):0;
+  xp+=bonus;
+  sess.xp+=xp;
+  const m=S.meta;
+  const willMeet = m.xpToday<m.goal && (m.xpToday+xp)>=m.goal;
+  addXp(xp); creditUnit(uname,xp);
+  m.gems += 1;
+  beep("ok");
+  // xp floater near button or center
+  const r = btn? btn.getBoundingClientRect() : $("#stage").getBoundingClientRect();
+  floatXp("+"+xp, r.left+r.width/2, r.top+ (btn?10:60));
+  showFeedback(true, isMc, bonus);
+  renderCombo();
+  renderShearts(); renderProgressAfter();
+  if(willMeet){ setTimeout(()=>burstConfetti(),150); }
+}
+function onWrong(){
+  sess.combo=0; loseHeart(); beep("no");
+  showFeedback(false); renderCombo(); renderShearts();
+  renderProgressAfter();
+  if(S.meta.hardMode && S.meta.hearts<=0){ /* handled on continue */ }
+}
+function renderProgressAfter(){ /* progress advances when moving to next */ }
+function renderCombo(){
+  const c=$("#combo"); if(!c)return;
+  if(sess.combo>=2){ c.textContent="🔥 "+sess.combo+" Combo"; c.classList.add("on"); }
+  else c.classList.remove("on");
+}
+function showFeedback(ok, isMc, bonus){
+  const ps=sides(cur);
+  const fb=$("#fb");
+  fb.className="fb "+(ok?"ok":"no");
+  const okTitles=["Richtig!","Super!","Perfekt!","Genau!","Klasse!"];
+  const t= ok? okTitles[Math.floor(Math.random()*okTitles.length)] : "Nicht ganz";
+  const detail= ok? (bonus?`+${bonus} Combo-Bonus`:"Weiter so 🐯") : `Antwort: <b style="color:var(--ink)">${esc(ps.a)}</b>`;
+  fb.innerHTML=`
+    <div class="fbrow">
+      <div class="fi">${ok?`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>`
+        :`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>`}</div>
+      <div><div class="ft">${t}</div><div class="fs">${detail}</div></div>
+    </div>
+    <button class="btn ${ok?'':'g-again'}" id="cont" style="${ok?'':'--c:var(--heart);--cd:var(--heart-d)'}">${queue.length?"Weiter":"Fertig"}</button>`;
+  $("#cont").onclick=continueNext;
+  requestAnimationFrame(()=>fb.classList.add("show"));
+  // keyboard: enter to continue
+}
+function continueNext(){
+  $("#fb").classList.remove("show");
+  sess.done++;
+  updateProgress();
+  // out of hearts?
+  if(S.meta.hardMode && S.meta.hearts<=0){ setTimeout(outOfHearts,200); return; }
+  setTimeout(()=>{ if(queue.length) next(); else finishSession(); }, 180);
+}
+function finishSession(){
+  const m=S.meta; const secs=Math.round((Date.now()-sess.start)/1000);
+  const acc= sess.answered? Math.round(sess.correct/sess.answered*100):100;
+  const goalMet = !sess.goalWasMet && m.xpToday>=m.goal;
+  $("#stage").innerHTML=`
+    <div class="done">
+      ${tigerSVG(96)}
+      <h1 style="font-size:30px;margin-top:6px">Sitzung geschafft!</h1>
+      <div class="muted" style="font-weight:700">${esc(sess.label)} · ${sess.answered} Karten</div>
+      <div class="statrow">
+        <div class="statbox sb-xp"><div class="k">XP verdient</div><div class="inner"><div class="v tnum">+${sess.xp}</div></div></div>
+        <div class="statbox sb-acc"><div class="k">Genauigkeit</div><div class="inner"><div class="v tnum">${acc}%</div></div></div>
+        <div class="statbox sb-combo"><div class="k">Beste Combo</div><div class="inner"><div class="v tnum">${sess.bestCombo}🔥</div></div></div>
+        <div class="statbox sb-time"><div class="k">Zeit</div><div class="inner"><div class="v tnum">${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}</div></div></div>
+      </div>
+      ${goalMet?`<div class="chip on" style="font-size:14px;padding:8px 14px">🎉 Tagesziel erreicht — Streak ${m.streak} 🔥</div>`:""}
+    </div>`;
+  $("#foot").innerHTML="";
+  const b=el("button","btn xp","Weiter"); b.onclick=closeSession; $("#foot").appendChild(b);
+  $("#prog").style.width="100%";
+  beep("done");
+  if(goalMet||acc>=90) setTimeout(burstConfetti,120);
+  save();
+}
+function outOfHearts(){
+  const m=S.meta;
+  $("#stage").innerHTML=`
+    <div class="done">
+      <div style="font-size:64px">💔</div>
+      <h1 style="font-size:28px">Keine Herzen mehr</h1>
+      <div class="muted" style="font-weight:700;max-width:30ch">Herzen füllen sich mit der Zeit wieder auf — oder tausche Edelsteine ein, um sofort weiterzumachen.</div>
+      <div class="statrow" style="grid-template-columns:1fr">
+        <div class="statbox sb-xp"><div class="k">Diese Sitzung</div><div class="inner"><div class="v tnum">+${sess?sess.xp:0} XP</div></div></div>
+      </div>
+    </div>`;
+  $("#foot").innerHTML="";
+  const refill=el("button","btn","Herzen auffüllen · 50 💎");
+  refill.disabled=m.gems<50;
+  refill.onclick=()=>{ if(m.gems>=50){ m.gems-=50; m.hearts=5; m.heartTs=Date.now(); save(); if(queue.length){renderShearts(); next();} else finishSession(); } };
+  const leave=el("button","btn ghost","Pause machen"); leave.style.marginTop="10px"; leave.onclick=closeSession;
+  $("#foot").appendChild(refill); $("#foot").appendChild(leave);
+}
+function closeSession(){
+  $("#session").style.display="none";
+  $("#home").style.display="flex";
+  cur=null; sess=null; queue=[];
+  renderHome();
+}
+$("#quit").onclick=()=>{ if(!sess||sess.done===0||confirm("Sitzung beenden? Dein Fortschritt an beantworteten Karten bleibt gespeichert.")) closeSession(); };
+
+/* ---------- floaters / confetti / sound ---------- */
+function floatXp(txt,x,y){
+  const f=el("div","floater",txt); f.style.left=(x-20)+"px"; f.style.top=(y)+"px";
+  f.style.animation="floatUp 1s ease-out forwards"; document.body.appendChild(f);
+  setTimeout(()=>f.remove(),1000);
+}
+let actx;
+function beep(kind){
+  if(!S.meta.sound)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const seq= kind==="ok"?[[660,0],[880,.09]]: kind==="no"?[[200,0],[150,.1]]: kind==="done"?[[523,0],[659,.1],[784,.2],[1046,.32]]:[[440,0]];
+    seq.forEach(([f,t])=>{ const o=actx.createOscillator(),g=actx.createGain();
+      o.type= kind==="no"?"sawtooth":"triangle"; o.frequency.value=f;
+      o.connect(g); g.connect(actx.destination);
+      const s=actx.currentTime+t; g.gain.setValueAtTime(.0001,s);
+      g.gain.exponentialRampToValueAtTime(kind==="no"?.15:.22,s+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,s+.22);
+      o.start(s); o.stop(s+.24); });
+  }catch(e){}
+}
+const cvs=$("#confetti"), cx=cvs.getContext("2d"); let parts=[],rafC;
+function burstConfetti(){
+  cvs.width=innerWidth; cvs.height=innerHeight;
+  const cols=["#5AB81E","#F5B400","#1C9BE6","#8A5CF6","#E8452B","#12B5A6"];
+  for(let k=0;k<130;k++) parts.push({x:innerWidth/2+(Math.random()-.5)*160, y:innerHeight*0.42,
+    vx:(Math.random()-.5)*11, vy:-Math.random()*13-4, g:.35+Math.random()*.2,
+    c:cols[k%cols.length], s:5+Math.random()*6, r:Math.random()*6, vr:(Math.random()-.5)*.4, life:0});
+  if(!rafC) tickC();
+}
+function tickC(){
+  cx.clearRect(0,0,cvs.width,cvs.height); let alive=false;
+  parts.forEach(p=>{ p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.life++;
+    if(p.y<cvs.height+20){alive=true;} cx.save(); cx.translate(p.x,p.y); cx.rotate(p.r);
+    cx.fillStyle=p.c; cx.globalAlpha=Math.max(0,1-p.life/120); cx.fillRect(-p.s/2,-p.s/2,p.s,p.s*1.4); cx.restore(); });
+  if(alive){ rafC=requestAnimationFrame(tickC); } else { parts=[]; rafC=null; cx.clearRect(0,0,cvs.width,cvs.height); }
+}
+function toast(msg){
+  const t=el("div",null,msg);
+  t.style.cssText="position:fixed;left:50%;top:70px;transform:translateX(-50%);background:var(--ink);color:var(--bg);"
+    +"padding:10px 16px;border-radius:12px;font-weight:800;z-index:95;box-shadow:var(--shadow)";
+  document.body.appendChild(t); setTimeout(()=>{t.style.transition="opacity .4s";t.style.opacity="0";setTimeout(()=>t.remove(),400);},1400);
+}
+
+/* ---------- modals: settings / add card ---------- */
+const modal=$("#modal"), sheet=$("#sheet");
+function closeModal(){ modal.classList.remove("open"); }
+modal.onclick=e=>{ if(e.target===modal) closeModal(); };
+function openSettings(){
+  const m=S.meta;
+  sheet.innerHTML=`
+    <div class="row sp"><h2>Einstellungen</h2><button class="iconbtn" id="x1">✕</button></div>
+    <div class="field"><label>Abfragerichtung</label>
+      <div class="seg" id="dir">
+        <button data-v="de2en" class="${m.dir==='de2en'?'on':''}">DE → EN</button>
+        <button data-v="en2de" class="${m.dir==='en2de'?'on':''}">EN → DE</button>
+        <button data-v="mix" class="${m.dir==='mix'?'on':''}">Gemischt</button>
+      </div></div>
+    <div class="field row sp" style="align-items:flex-start">
+      <label style="margin:0">Umgekehrte Karten 🔁<div class="muted" style="font-weight:700;font-size:11.5px;margin-top:3px;max-width:26ch">Jede Vokabel wird in beide Richtungen separat abgefragt (wie „reverse cards“ in Anki).</div></label>
+      <button class="chip ${m.reversed?'on':''}" id="rev" style="flex:0 0 auto">${m.reversed?'An':'Aus'}</button></div>
+    <div class="field"><label>Neue Karten pro Tag · <b id="npdV" class="tnum">${m.newPerDay}</b></label>
+      <input type="range" id="npd" min="5" max="40" step="5" value="${m.newPerDay}"></div>
+    <div class="field"><label>Tägliches XP-Ziel · <b id="goalV" class="tnum">${m.goal}</b></label>
+      <input type="range" id="goal" min="20" max="150" step="10" value="${m.goal}"></div>
+    <div class="field row sp"><label style="margin:0">Herzen (Duolingo-Modus)</label>
+      <button class="chip ${m.hardMode?'on':''}" id="hm">${m.hardMode?'An':'Aus'}</button></div>
+    <div class="field row sp"><label style="margin:0">Soundeffekte</label>
+      <button class="chip ${m.sound?'on':''}" id="snd">${m.sound?'An':'Aus'}</button></div>
+    <div class="field row sp"><label style="margin:0">Dunkles Design</label>
+      <button class="chip" id="thm">Auto</button></div>
+
+    <div class="seclabel">Geräteübergreifend speichern</div>
+    <div class="field row sp" style="align-items:flex-start">
+      <label style="margin:0">Sync-Datei<div class="muted" style="font-weight:700;font-size:11.5px;margin-top:3px;max-width:30ch">Wähle eine Datei in deinem Google-Drive-/Dropbox-/iCloud-Ordner — sie wird automatisch gespeichert und über den Ordner mit deinen Geräten synchronisiert.</div></label>
+      <span class="chip syncbadge" data-s="${syncState}" style="flex:0 0 auto">${syncLabel()}</span></div>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      ${HAS_FS?`<button class="btn ghost sm" id="fsbtn" style="flex:1">${syncState==='need'?'Erneut verbinden':(fsReady?'Andere Datei…':'Sync-Datei wählen')}</button>`:''}
+      <button class="btn ghost sm" id="expbtn" style="flex:1">Backup</button>
+      <button class="btn ghost sm" id="impbtn" style="flex:1">Wiederherstellen</button>
+    </div>
+    ${!HAS_FS?`<div class="muted" style="font-size:11.5px;font-weight:700;margin-top:6px">Auto-Sync wird auf diesem Gerät (z. B. iPhone) nicht unterstützt — nutze Backup zum Sichern und Wiederherstellen auf einem anderen Gerät.</div>`:''}
+    <input type="file" id="impfile" accept="application/json,.json" hidden>
+
+    <div class="seclabel">Erinnerung</div>
+    <div class="field row sp" style="align-items:flex-start">
+      <label style="margin:0">Täglicher Anstupser 🔔<div class="muted" style="font-weight:700;font-size:11.5px;margin-top:3px;max-width:30ch">Benachrichtigung, wenn dein Tagesziel noch offen ist. Am zuverlässigsten, wenn du die App zum Startbildschirm hinzufügst.</div></label>
+      <button class="chip ${m.remindOn?'on':''}" id="rem" style="flex:0 0 auto">${m.remindOn?'An':'Aus'}</button></div>
+    ${m.remindOn?`<div class="field"><label>Uhrzeit</label><input type="time" id="remtime" value="${m.remindTime||'19:00'}"></div>`:''}
+
+    <div class="field" style="margin-top:18px"><button class="btn ghost sm" id="reset"><span class="danger">Fortschritt zurücksetzen</span></button></div>
+    <div class="muted center" style="font-size:11.5px">${RAW.length} eingebaute Karten · ${S.custom.length} eigene</div>`;
+  $("#x1").onclick=closeModal;
+  const fsb=$("#fsbtn"); if(fsb) fsb.onclick=()=>{ syncState==="need"?reconnectSync():connectSyncFile(); };
+  $("#expbtn").onclick=exportBackup;
+  $("#impbtn").onclick=()=>$("#impfile").click();
+  $("#impfile").onchange=e=>{ const f=e.target.files[0]; if(f) importBackup(f); };
+  $("#rem").onclick=async()=>{ if(!m.remindOn){ if(await enableReminders()){ m.remindOn=true; m.remindLast=0; } } else { m.remindOn=false; } save(); openSettings(); };
+  const rt=$("#remtime"); if(rt) rt.onchange=e=>{ m.remindTime=e.target.value; m.remindLast=0; save(); };
+  $("#dir").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.dir=b.dataset.v;save();openSettings();});
+  $("#rev").onclick=()=>{m.reversed=!m.reversed;save();openSettings();toast(m.reversed?"Umgekehrte Karten an — beide Richtungen":"Umgekehrte Karten aus");};
+  $("#npd").oninput=e=>{m.newPerDay=+e.target.value;$("#npdV").textContent=m.newPerDay;save();};
+  $("#goal").oninput=e=>{m.goal=+e.target.value;$("#goalV").textContent=m.goal;save();renderHud();};
+  $("#hm").onclick=()=>{m.hardMode=!m.hardMode;if(m.hardMode&&m.hearts<=0)m.hearts=5;save();openSettings();renderHud();};
+  $("#snd").onclick=()=>{m.sound=!m.sound;save();openSettings();if(m.sound)beep("ok");};
+  const thmBtn=$("#thm"); syncThmLabel(thmBtn); thmBtn.onclick=()=>{cycleTheme();syncThmLabel(thmBtn);};
+  $("#reset").onclick=()=>{ if(confirm("Wirklich allen Lernfortschritt löschen? Das kann nicht rückgängig gemacht werden.")){
+    S=defaults(); save(); closeModal(); renderHome(); toast("Zurückgesetzt"); }};
+  modal.classList.add("open");
+}
+function openAdd(){
+  sheet.innerHTML=`
+    <div class="row sp"><h2>Eigene Karte</h2><button class="iconbtn" id="x2">✕</button></div>
+    <div class="muted" style="font-weight:700;font-size:13px;margin-bottom:4px">Landet in der Einheit „My Cards“ und wird ganz normal wiederholt.</div>
+    <div class="field"><label>Deutsch (mit Artikel)</label><input type="text" id="ade" placeholder="z. B. der Apfel"></div>
+    <div class="field"><label>Englisch</label><input type="text" id="aen" placeholder="e.g. the apple"></div>
+    <div class="field"><label>Beispielsatz (optional)</label><input type="text" id="aex" placeholder="Der Apfel ist rot."></div>
+    <button class="btn xp" id="save2">Karte hinzufügen</button>
+    <div id="added" class="muted center" style="font-size:12.5px;margin-top:10px"></div>`;
+  $("#x2").onclick=closeModal;
+  $("#save2").onclick=()=>{
+    const deRaw=$("#ade").value.trim(), en=$("#aen").value.trim(), ex=$("#aex").value.trim();
+    if(!deRaw||!en){ toast("Bitte Deutsch und Englisch ausfüllen"); return; }
+    let art="",de=deRaw; const mm=deRaw.match(/^(der|die|das)\s+(.+)/i); if(mm){art=mm[1].toLowerCase();de=mm[2];}
+    S.custom.push([en,de,art,"",`My Cards`,2,ex,""]);
+    save();
+    $("#ade").value="";$("#aen").value="";$("#aex").value="";$("#ade").focus();
+    $("#added").innerHTML=`✓ Hinzugefügt · insgesamt ${S.custom.length} eigene Karten`;
+  };
+  modal.classList.add("open");
+}
+/* theme toggle */
+function cycleTheme(){
+  const cur=document.documentElement.getAttribute("data-theme");
+  const nextT= cur==null?"light": cur==="light"?"dark":null;
+  if(nextT) document.documentElement.setAttribute("data-theme",nextT); else document.documentElement.removeAttribute("data-theme");
+  try{localStorage.setItem("tiger.theme",nextT||"auto");}catch(e){}
+}
+function syncThmLabel(b){ const c=document.documentElement.getAttribute("data-theme"); b.textContent= c==="dark"?"Dunkel": c==="light"?"Hell":"Auto"; b.classList.toggle("on",!!c); }
+
+/* ---------- keyboard ---------- */
+document.addEventListener("keydown",e=>{
+  if(modal.classList.contains("open")){ if(e.key==="Escape")closeModal(); return; }
+  if($("#session").style.display==="flex" && cur){
+    if($("#fb").classList.contains("show")){ if(e.key==="Enter"||e.key===" "){e.preventDefault();continueNext();} return; }
+    if(cur.mode==="mc"){ const n=parseInt(e.key); if(n>=1&&n<=4){ const b=$("#opts")&&$("#opts").children[n-1]; if(b&&!b.disabled)b.click(); } }
+    else { // review
+      if(!flipped && (e.key===" "||e.key==="Enter")){ e.preventDefault(); reveal(); }
+      else if(flipped){ const map={"1":"again","2":"hard","3":"good","4":"easy"}; if(map[e.key]) answerGrade(map[e.key]); }
+    }
+  }
+});
+
+/* ---------- boot ---------- */
+try{const t=localStorage.getItem("tiger.theme"); if(t&&t!=="auto")document.documentElement.setAttribute("data-theme",t);}catch(e){}
+if(!RAW.length){ document.body.innerHTML='<div style="padding:40px;font-family:sans-serif;text-align:center">Kartendaten (cards.js) konnten nicht geladen werden.</div>'; }
+else {
+  load(); renderHome();
+  initSync();
+  maybeRemind();
+  if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }catch(e){} }
+}
+setInterval(()=>{ if($("#session").style.display!=="flex"){ regenHearts(); renderHud(); maybeRemind(); } },60000);
+})();
+</script>

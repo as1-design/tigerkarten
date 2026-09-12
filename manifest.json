@@ -1,0 +1,15 @@
+{
+  "name": "Tigerkarten",
+  "short_name": "Tigerkarten",
+  "description": "German flashcards with spaced repetition, reversed cards, streaks and XP.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F6EF",
+  "theme_color": "#F5902B",
+  "lang": "de",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
