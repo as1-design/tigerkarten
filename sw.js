@@ -1,5 +1,8 @@
-/* Tigerkarten service worker — offline cache + reminder notification clicks */
-const CACHE = "tigerkarten-v1";
+/* Tigerkarten service worker — offline cache + reminder notification clicks.
+   Strategy: navigations are network-first (so a redeploy shows up right away when
+   online), other same-origin assets are stale-while-revalidate (instant from cache,
+   refreshed in the background). Both fall back to cache when offline. */
+const CACHE = "tigerkarten-v2";
 const CORE = ["./", "index.html", "cards.js", "icon.svg", "manifest.json"];
 
 self.addEventListener("install", (e) => {
@@ -13,19 +16,37 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Cache-first for same-origin GETs, network fallback (keeps the app working offline).
 self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.origin !== self.location.origin) return;
+  const req = e.request;
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+
+  // Page loads: network-first, fall back to the cached shell offline.
+  if (req.mode === "navigate") {
+    e.respondWith(
+      fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put("index.html", copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("index.html")))
+    );
+    return;
+  }
+
+  // Assets: stale-while-revalidate — serve cache now, update it for next time.
   e.respondWith(
-    caches.match(e.request).then((hit) =>
-      hit ||
-      fetch(e.request).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-        return res;
-      }).catch(() => caches.match("index.html"))
-    )
+    caches.match(req).then((hit) => {
+      const fetching = fetch(req)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => hit);
+      return hit || fetching;
+    })
   );
 });
 

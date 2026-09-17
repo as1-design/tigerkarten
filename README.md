@@ -9,8 +9,10 @@ No build step, no dependencies, no server — a single HTML page plus a data fil
 ## Features
 
 **The Anki half — the engine**
-- **SM‑2 spaced repetition**: every card carries an ease factor, interval and due date, with learning steps (1 min → 10 min → graduate).
-- **Flip cards** with `Again / Hard / Good / Easy` grading — each button shows its *real predicted interval* (`10m`, `1d`, `4d`, `2.1mo`).
+- **SM‑2 spaced repetition**: every card carries an ease factor, interval and due date, with learning steps (1 min → 10 min → graduate). Grades give **distinct, strictly‑increasing intervals** (Again / Hard / Good / Easy are always different).
+- **Flip cards** with `Again / Hard / Good / Easy` grading — each button shows its *real predicted interval* (`10m`, `2d`, `3d`, `4d` …).
+- **Bounded daily review**: the home button gives you a capped batch (default **30**, adjustable) of the **hardest due cards**, so sessions don't balloon as you learn more.
+- **Per‑category control**: tap any topic to choose **Wiederholen** (review everything due in it) or **Neu lernen** (introduce new words, within your daily new‑card budget).
 - **Reversed cards** (optional): each word becomes two independently‑scheduled cards — DE→EN *and* EN→DE — exactly like Anki's reverse cards.
 - **Add your own cards**, which land in a "My Cards" unit and schedule normally.
 
@@ -18,11 +20,12 @@ No build step, no dependencies, no server — a single HTML page plus a data fil
 - **Streak, XP, gems, hearts and levels** in a sticky HUD.
 - **New words are taught with 4‑option multiple choice** (distractors drawn from the same topic), then handed to the SRS engine.
 - **Daily XP goal ring**, combo bonuses, floating +XP, confetti, sound effects.
-- A winding **unit path** across the 18 topics with mastery crowns, plus a weekly **league**.
+- A winding **unit path** across the 18 topics with mastery crowns.
 - **Hearts** deplete on wrong answers and refill over time (or with gems) — fully toggleable.
 
 **Sync & reminders** (Settings ⚙)
 - **Cross‑device progress, no accounts.** On a computer, pick a **sync file once** and the app saves to it automatically on every change. Put that file in a **Google Drive / Dropbox / iCloud** folder and it rides that service's own sync to your other devices.
+- **Big Save button** on the home screen — saves to your sync file instantly (or downloads a backup on iPhone). Progress also **auto‑saves periodically**, and the app **warns before you leave** if there are unsaved changes.
 - **Backup / Restore** — a one‑tap export/import that works on *every* device (including iPhone, where browsers block direct file access).
 - **Daily reminder** — an optional notification when your goal is still open. Install to your home screen for the best chance of it firing.
 - **Installable (PWA)** — add it to your home screen / desktop and it runs full‑screen and offline.

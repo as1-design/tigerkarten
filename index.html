@@ -135,15 +135,6 @@ button{font-family:inherit}
 .crowns svg{width:13px;height:13px}
 .crowns .off{color:var(--line2)}
 
-/* league */
-.lb{display:flex;align-items:center;gap:10px;padding:9px 6px;border-bottom:1px solid var(--line)}
-.lb:last-child{border-bottom:0}
-.lb .rk{width:22px;text-align:center;font-weight:800;color:var(--muted)}
-.lb .nm{flex:1;font-weight:700}
-.lb.me{background:var(--go-soft);border-radius:12px;border-bottom:0;padding-left:10px;padding-right:10px}
-.lb.me .nm{color:var(--go-d)}
-.medal{color:var(--xp)}
-
 /* ---- Review session ---- */
 #session{position:fixed;inset:0;z-index:60;background:var(--bg);display:none;flex-direction:column;
   max-width:480px;margin:0 auto}
@@ -332,7 +323,7 @@ const defaults=()=>({
   unitXp:{}, // unit name -> lifetime xp for crowns
   meta:{streak:0,last:0, xpToday:0, dayKey:todayKey(), newToday:0,
     totalXp:0, gems:120, hearts:5, heartTs:Date.now(), goal:50,
-    dir:"de2en", reversed:false, newPerDay:15, hardMode:true, sound:true, weekXp:0, weekKey:weekKey(),
+    dir:"de2en", reversed:false, newPerDay:15, maxReviews:30, hardMode:true, sound:true, weekXp:0, weekKey:weekKey(),
     savedAt:0, remindOn:false, remindTime:"19:00", remindLast:0}
 });
 function weekKey(){const d=new Date();const day=(d.getDay()+6)%7;return todayKey(new Date(Date.now()-day*DAY));}
@@ -342,7 +333,7 @@ function load(){
   rollover();
 }
 let saveT; function save(){
-  S.meta.savedAt=Date.now();
+  S.meta.savedAt=Date.now(); dirty=true;
   try{clearTimeout(saveT);saveT=setTimeout(()=>{
     try{localStorage.setItem(SKEY,JSON.stringify(S));}catch(e){}
     syncPush();
@@ -368,7 +359,7 @@ function regenHearts(){
    Where the browser blocks file access (iPhone/Safari/Firefox), use one-tap
    Backup / Restore instead. localStorage is always the offline cache. */
 const HAS_FS = typeof window.showSaveFilePicker === "function";
-let fileHandle=null, fsReady=false, fsPushT=null, syncState="local";
+let fileHandle=null, fsReady=false, fsPushT=null, syncState="local", dirty=false;
 const SYNC_LABEL={local:"Nur auf diesem Gerät", syncing:"Speichere…", synced:"Automatisch gespeichert",
   error:"Datei getrennt", need:"Zum Verbinden tippen"};
 function syncLabel(){ return SYNC_LABEL[syncState]||""; }
@@ -417,7 +408,7 @@ async function pullThenEnable(){
     const remote=await readHandle(fileHandle);
     if(remote && (remote.savedAt||0) > (S.meta.savedAt||0)){ applyState(remote); rollover(); renderHome(); }
     else { await writeHandle(fileHandle, packState()); }
-    fsReady=true; setSync("synced");
+    dirty=false; fsReady=true; setSync("synced");
   }catch(e){ setSync("error"); }
 }
 async function connectSyncFile(){
@@ -439,7 +430,19 @@ async function reconnectSync(){
 function syncPush(){
   if(!fsReady || !fileHandle) return;
   setSync("syncing"); clearTimeout(fsPushT);
-  fsPushT=setTimeout(async()=>{ try{ await writeHandle(fileHandle, packState()); setSync("synced"); }catch(e){ setSync("error"); } }, 800);
+  fsPushT=setTimeout(async()=>{ try{ await writeHandle(fileHandle, packState()); dirty=false; setSync("synced"); }catch(e){ setSync("error"); } }, 800);
+}
+// the big Save button — adapts to the device
+function doSave(){
+  if(fsReady && fileHandle){
+    setSync("syncing");
+    writeHandle(fileHandle, packState()).then(()=>{ dirty=false; setSync("synced"); toast("Gespeichert ✓"); })
+      .catch(()=>{ setSync("error"); toast("Speichern fehlgeschlagen"); });
+  } else if(HAS_FS){
+    connectSyncFile();               // desktop, not connected yet → set up the sync file (then it auto-saves)
+  } else {
+    exportBackup(); toast("Backup gespeichert ✓");   // iPhone / no file access → download
+  }
 }
 // another device may have updated the shared file while we were away
 document.addEventListener("visibilitychange",()=>{
@@ -455,6 +458,7 @@ function exportBackup(){
     const url=URL.createObjectURL(blob); const a=document.createElement("a");
     a.href=url; a.download="tigerkarten-progress.json"; document.body.appendChild(a); a.click();
     setTimeout(()=>{ a.remove(); URL.revokeObjectURL(url); },600);
+    dirty=false;
   }catch(e){ toast("Backup nicht möglich"); }
 }
 function importBackup(file){
@@ -528,20 +532,34 @@ function fmtIvl(p){
   if(d<365) return (d/30).toFixed(d<60?1:0)+"mo";
   return (d/365).toFixed(1)+"y";
 }
+const MAX_IVL=365; // days
 function apply(p,g){ // mutate p by grade
   const now=Date.now();
   if(p.st==="learning"){
     if(g==="again"){ p.step=0; p.due=now+LEARN[0]*MIN; }
-    else if(g==="hard"){ p.due=now+Math.max(LEARN[p.step]||1, (LEARN[0]))*MIN*1.5; }
+    else if(g==="hard"){ p.due=now+Math.round((LEARN[p.step]||LEARN[0])*1.5)*MIN; } // same step, a bit longer
     else if(g==="good"){
-      if(p.step>=LEARN.length-1){ p.st="review"; p.ivl=1; p.reps++; p.due=now+DAY; }
+      if(p.step>=LEARN.length-1){ p.st="review"; p.ivl=1; p.reps++; p.due=now+DAY; } // graduate → 1 day
       else { p.step++; p.due=now+LEARN[p.step]*MIN; }
-    } else { p.st="review"; p.ivl=4; p.reps++; p.due=now+4*DAY; } // easy graduates
-  } else { // review
-    if(g==="again"){ p.lapses++; p.ease=Math.max(1.3,p.ease-0.2); p.st="learning"; p.step=0; p.ivl=0; p.due=now+10*MIN; }
-    else if(g==="hard"){ p.ease=Math.max(1.3,p.ease-0.15); p.ivl=Math.max(1,p.ivl*1.2); p.due=now+p.ivl*DAY; p.reps++; }
-    else if(g==="good"){ p.ivl=Math.max(1,p.ivl*p.ease); p.due=now+p.ivl*DAY; p.reps++; }
-    else { p.ease+=0.15; p.ivl=Math.max(1,p.ivl*p.ease*1.3); p.due=now+p.ivl*DAY; p.reps++; }
+    } else { p.st="review"; p.ivl=4; p.reps++; p.due=now+4*DAY; } // easy graduates → 4 days
+  } else { // review — distinct, strictly-increasing integer-day intervals (Anki-style)
+    if(g==="again"){ p.lapses++; p.ease=Math.max(1.3,p.ease-0.2); p.st="learning"; p.step=0; p.ivl=1; p.due=now+10*MIN; }
+    else {
+      const base=Math.max(1,p.ivl);
+      if(g==="hard"){
+        p.ease=Math.max(1.3,p.ease-0.15);
+        p.ivl=Math.min(MAX_IVL, Math.max(base+1, Math.round(base*1.2)));
+      } else if(g==="good"){
+        const hard=Math.max(base+1, Math.round(base*1.2));
+        p.ivl=Math.min(MAX_IVL, Math.max(hard+1, Math.round(base*p.ease)));
+      } else { // easy
+        const hard=Math.max(base+1, Math.round(base*1.2));
+        const good=Math.max(hard+1, Math.round(base*p.ease));
+        p.ease+=0.15;
+        p.ivl=Math.min(MAX_IVL, Math.max(good+1, Math.round(base*p.ease*1.3)));
+      }
+      p.due=now+p.ivl*DAY; p.reps++;
+    }
   }
   return p;
 }
@@ -678,14 +696,21 @@ function renderHome(){
       </div>`;
   pad.appendChild(goal);
 
-  // start button
-  const canStart=totalDue>0||newLeft>0;
-  const startBtn=el("button","btn xp", (totalDue>0? `Wiederholen · ${totalDue}` : (newLeft>0?`Neu lernen · ${Math.min(newLeft,newAvail())}`:"Alles erledigt ✓")));
+  // main button: a bounded daily review of the hardest due cards; falls back to learning new words
+  const cap=m.maxReviews||30, newAvailNow=newAvail();
+  let startBtn;
+  if(totalDue>0){
+    startBtn=el("button","btn xp",`Tägliche Wiederholung · ${Math.min(cap,totalDue)}`);
+    startBtn.onclick=()=>startSession({scope:allIdx(), wantReviews:true, reviewCap:cap, label:"Tägliche Wiederholung"});
+  } else if(newLeft>0 && newAvailNow>0){
+    startBtn=el("button","btn xp",`Neue Wörter lernen · ${Math.min(newLeft,newAvailNow)}`);
+    startBtn.onclick=()=>startSession({scope:allIdx(), wantNew:true, newCap:newLeft, label:"Neue Wörter"});
+  } else {
+    startBtn=el("button","btn xp","Alles erledigt ✓"); startBtn.disabled=true;
+  }
   startBtn.style.marginBottom="6px";
-  startBtn.disabled=!canStart;
-  startBtn.onclick=()=>startSession(null);
   pad.appendChild(startBtn);
-  const sub=el("div","muted center",`${m.hardMode?`❤ ${m.hearts}/5 · `:""}${newLeft} neue Karten heute übrig`);
+  const sub=el("div","muted center",`${m.hardMode?`❤ ${m.hearts}/5 · `:""}${totalDue} fällig · ${newLeft} neue heute übrig`);
   sub.style.cssText+="font-size:12px;font-weight:700;margin:6px 0 4px";
   pad.appendChild(sub);
   h.appendChild(pad);
@@ -716,29 +741,23 @@ function renderHome(){
       </div>`;
     // position the ring behind cap
     const nr=node.querySelector(".node-ring"); nr.style.position="absolute"; nr.style.inset="0";
-    node.onclick=()=>startSession(u.idxs.slice(), titleCase(u.name));
+    node.onclick=()=>openUnit(u);
     path.appendChild(node);
   });
   sec.appendChild(path);
   h.appendChild(sec);
 
-  // ---- league ----
-  const lg=el("div","pad"); lg.style.paddingTop="0";
-  lg.appendChild(el("div","eyebrow","Liga · diese Woche"));
-  const board=el("div","goalcard"); board.style.marginTop="8px"; board.style.padding="10px 12px";
-  const bots=[["Lena",120,"🐨"],["Max",95,"🦊"],["Sofia",70,"🐼"],["Jonas",40,"🐧"],["Pia",18,"🐢"]];
-  const meRow=["Du",S.meta.weekXp,"🦉",true];
-  const rows=bots.map(b=>[b[0],b[1],b[2],false]).concat([meRow]).sort((a,b)=>b[1]-a[1]);
-  board.innerHTML=rows.map((r,idx)=>{
-    const medal=idx<3?`<span class="medal">${["①","②","③"][idx]}</span>`:`<span class="rk tnum">${idx+1}</span>`;
-    return `<div class="lb ${r[3]?'me':''}">${medal}<span style="font-size:18px">${r[2]}</span>
-      <span class="nm">${r[0]}</span><b class="tnum" style="color:var(--xp-d)">${r[1]} XP</b></div>`;
-  }).join("");
-  lg.appendChild(board);
-  h.appendChild(lg);
+  // ---- save (big button) ----
+  const savewrap=el("div","pad"); savewrap.style.cssText="padding-top:2px";
+  const saveBtn=el("button","btn info","Fortschritt sichern");
+  saveBtn.onclick=doSave; savewrap.appendChild(saveBtn);
+  const st=el("div","center"); st.style.cssText="margin-top:7px";
+  st.innerHTML=`<span class="chip syncbadge" data-s="${syncState}" style="font-size:11.5px">${syncLabel()}</span>`;
+  savewrap.appendChild(st);
+  h.appendChild(savewrap);
 
   // ---- footer actions ----
-  const foot=el("div","pad row"); foot.style.cssText+="gap:10px;padding-top:4px;padding-bottom:30px";
+  const foot=el("div","pad row"); foot.style.cssText+="gap:10px;padding-top:12px;padding-bottom:30px";
   const addB=el("button","btn ghost sm","+ Eigene Karte"); addB.onclick=openAdd;
   const setB=el("button","iconbtn"); setB.setAttribute("aria-label","Einstellungen");
   setB.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M4.2 7l2.2 1.3M17.6 15.7l2.2 1.3M4.2 17l2.2-1.3M17.6 8.3l2.2-1.3"/></svg>`;
@@ -747,30 +766,58 @@ function renderHome(){
   h.appendChild(foot);
   save();
 }
+// category action sheet: choose Review (all due) or Learn new
+function openUnit(u){
+  const due=dueReviewCount(u.idxs), fresh=newAvail(u.idxs);
+  const learned=learnedCount(u.idxs), total=totalInst(u.idxs);
+  const budgetLeft=Math.max(0, S.meta.newPerDay-S.meta.newToday);
+  sheet.innerHTML=`
+    <div class="row sp"><h2>${titleCase(u.name)}</h2><button class="iconbtn" id="xu">✕</button></div>
+    <div class="muted" style="font-weight:700;font-size:13px;margin:2px 0 16px">${learned}/${total} gelernt · ${due} fällig · ${fresh} neu</div>
+    <button class="btn ${due?'':'ghost'}" id="ureview" ${due?'':'disabled'} style="margin-bottom:12px">Wiederholen · ${due}</button>
+    <button class="btn xp" id="ulearn" ${(fresh&&budgetLeft)?'':'disabled'}>Neu lernen · ${Math.min(fresh, budgetLeft||fresh)}</button>
+    ${fresh&&!budgetLeft?`<div class="muted center" style="font-size:11.5px;font-weight:700;margin-top:8px">Tageslimit für neue Karten erreicht — morgen wieder, oder erhöhe es in den Einstellungen.</div>`:''}`;
+  $("#xu").onclick=closeModal;
+  const rv=$("#ureview"); if(due) rv.onclick=()=>{ closeModal(); startSession({scope:u.idxs.slice(), wantReviews:true, reviewCap:Infinity, label:titleCase(u.name)}); };
+  const ln=$("#ulearn"); if(fresh&&budgetLeft) ln.onclick=()=>{ closeModal(); startSession({scope:u.idxs.slice(), wantNew:true, newCap:Math.min(fresh,budgetLeft), label:titleCase(u.name)}); };
+  modal.classList.add("open");
+}
 function svgBolt2(){return `<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align:-2px"><path fill="var(--crown)" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;}
 
 /* ---------- SESSION ---------- */
 let queue=[], cur=null, sess=null;
-function startSession(scopeIdxs, label){
+// hardness score for prioritizing difficult cards (higher = harder), with jitter for randomness
+function hardness(i,rev){ const p=getP(i,rev), c=card(i);
+  const ease=p?p.ease:2.5, lap=p?p.lapses:0, diff=(c&&c[F.DIFF])||2;
+  return lap*1.5 + (2.6-ease) + diff*0.25 + Math.random()*0.8; }
+
+// counts for a scope (used by the dashboard & category sheet)
+function dueReviewCount(scope){ let n=0; eachInst(scope||allIdx(),(i,r)=>{ if(isDueI(i,r))n++; }); return n; }
+
+function startSession(opts){
+  opts=opts||{};
   regenHearts();
   const m=S.meta;
   if(m.hardMode && m.hearts<=0){ outOfHearts(); return; }
-  const scope=scopeIdxs||allIdx();
-  const due=[], newAll=[];
-  eachInst(scope,(i,r)=>{ if(isDueI(i,r)) due.push({i,rev:r}); else if(isNewI(i,r)) newAll.push({i,rev:r}); });
-  due.sort((a,b)=>getP(a.i,a.rev).due-getP(b.i,b.rev).due);
-  let newLeft=Math.max(0,m.newPerDay-m.newToday);
-  if(scopeIdxs){ newLeft=Math.max(newLeft, Math.min(10, newAll.length)); } // unit tap can always teach a few
-  const news=newAll.slice(0,newLeft);
-  if(!due.length && !news.length){ toast("Keine Karten fällig 🎉"); return; }
-  // interleave: sprinkle new among reviews
-  queue=[];
-  const q=due.map(x=>({i:x.i,rev:x.rev,mode:"review"})).concat(news.map(x=>({i:x.i,rev:x.rev,mode:"mc"})));
-  // simple shuffle of the new/review mix but keep learning steps ordering loose
-  for(let k=q.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[q[k],q[j]]=[q[j],q[k]];}
-  queue=q;
+  const scope=opts.scope||allIdx();
+  const dueInst=[], newInst=[];
+  eachInst(scope,(i,r)=>{ if(isDueI(i,r)) dueInst.push({i,rev:r}); else if(isNewI(i,r)) newInst.push({i,rev:r}); });
+  let picks=[];
+  if(opts.wantReviews){
+    const cap = opts.reviewCap==null ? Infinity : opts.reviewCap;
+    dueInst.sort((a,b)=>hardness(b.i,b.rev)-hardness(a.i,a.rev));       // hardest first
+    picks=picks.concat(dueInst.slice(0,cap).map(x=>({i:x.i,rev:x.rev,mode:"review"})));
+  }
+  if(opts.wantNew){
+    const budget=Math.max(0, m.newPerDay-m.newToday);
+    const cap = opts.newCap==null ? budget : Math.min(opts.newCap, budget);
+    picks=picks.concat(newInst.slice(0,cap).map(x=>({i:x.i,rev:x.rev,mode:"mc"})));
+  }
+  if(!picks.length){ toast(opts.wantNew&&!opts.wantReviews?"Keine neuen Karten übrig 🎉":"Nichts zu wiederholen 🎉"); return; }
+  for(let k=picks.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[picks[k],picks[j]]=[picks[j],picks[k]];} // shuffle presentation
+  queue=picks;
   sess={total:queue.length, done:0, correct:0, answered:0, combo:0, bestCombo:0,
-    xp:0, start:Date.now(), label:label||"Alle Einheiten", goalWasMet:m.xpToday>=m.goal, reinserts:0};
+    xp:0, start:Date.now(), label:opts.label||"Wiederholung", goalWasMet:m.xpToday>=m.goal, reinserts:0};
   $("#session").style.display="flex";
   $("#home").style.display="none";
   next();
@@ -1011,6 +1058,7 @@ function closeSession(){
   $("#home").style.display="flex";
   cur=null; sess=null; queue=[];
   renderHome();
+  if(dirty && !fsReady) setTimeout(()=>toast("Tippe „Fortschritt sichern“, um ihn zu behalten"),400); // nudge when not auto-syncing
 }
 $("#quit").onclick=()=>{ if(!sess||sess.done===0||confirm("Sitzung beenden? Dein Fortschritt an beantworteten Karten bleibt gespeichert.")) closeSession(); };
 
@@ -1075,6 +1123,8 @@ function openSettings(){
     <div class="field row sp" style="align-items:flex-start">
       <label style="margin:0">Umgekehrte Karten 🔁<div class="muted" style="font-weight:700;font-size:11.5px;margin-top:3px;max-width:26ch">Jede Vokabel wird in beide Richtungen separat abgefragt (wie „reverse cards“ in Anki).</div></label>
       <button class="chip ${m.reversed?'on':''}" id="rev" style="flex:0 0 auto">${m.reversed?'An':'Aus'}</button></div>
+    <div class="field"><label>Karten pro Wiederholung · <b id="mrV" class="tnum">${m.maxReviews}</b></label>
+      <input type="range" id="mr" min="10" max="60" step="5" value="${m.maxReviews}"></div>
     <div class="field"><label>Neue Karten pro Tag · <b id="npdV" class="tnum">${m.newPerDay}</b></label>
       <input type="range" id="npd" min="5" max="40" step="5" value="${m.newPerDay}"></div>
     <div class="field"><label>Tägliches XP-Ziel · <b id="goalV" class="tnum">${m.goal}</b></label>
@@ -1115,6 +1165,7 @@ function openSettings(){
   const rt=$("#remtime"); if(rt) rt.onchange=e=>{ m.remindTime=e.target.value; m.remindLast=0; save(); };
   $("#dir").querySelectorAll("button").forEach(b=>b.onclick=()=>{m.dir=b.dataset.v;save();openSettings();});
   $("#rev").onclick=()=>{m.reversed=!m.reversed;save();openSettings();toast(m.reversed?"Umgekehrte Karten an — beide Richtungen":"Umgekehrte Karten aus");};
+  $("#mr").oninput=e=>{m.maxReviews=+e.target.value;$("#mrV").textContent=m.maxReviews;save();};
   $("#npd").oninput=e=>{m.newPerDay=+e.target.value;$("#npdV").textContent=m.newPerDay;save();};
   $("#goal").oninput=e=>{m.goal=+e.target.value;$("#goalV").textContent=m.goal;save();renderHud();};
   $("#hm").onclick=()=>{m.hardMode=!m.hardMode;if(m.hardMode&&m.hearts<=0)m.hearts=5;save();openSettings();renderHud();};
@@ -1176,6 +1227,11 @@ else {
   maybeRemind();
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }catch(e){} }
 }
-setInterval(()=>{ if($("#session").style.display!=="flex"){ regenHearts(); renderHud(); maybeRemind(); } },60000);
+// warn before leaving only when there are unsaved changes and no auto-syncing file connected
+window.addEventListener("beforeunload",(e)=>{ if(dirty && !fsReady){ e.preventDefault(); e.returnValue=""; } });
+setInterval(()=>{
+  if($("#session").style.display!=="flex"){ regenHearts(); renderHud(); maybeRemind(); }
+  if(dirty && fsReady && fileHandle){ writeHandle(fileHandle,packState()).then(()=>{ dirty=false; setSync("synced"); }).catch(()=>{}); } // periodic safety flush
+},60000);
 })();
 </script>
